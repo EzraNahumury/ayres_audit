@@ -11,8 +11,10 @@ import {
   ChevronDown,
   ChevronRight,
   QrCode,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const menuSections = [
   {
@@ -39,6 +41,12 @@ const menuSections = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch("/api/auth", { method: "DELETE" });
+    router.push("/login");
+  };
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(
     Object.fromEntries(menuSections.map((s) => [s.title, true]))
   );
@@ -175,6 +183,18 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Logout */}
+      <div style={{ padding: "12px 12px", borderTop: "1px solid #e5e7eb" }}>
+        <button onClick={handleLogout} style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+          background: "none", color: "#ef4444", fontSize: 14, fontWeight: 500,
+        }}>
+          <LogOut style={{ width: 16, height: 16 }} />
+          Logout
+        </button>
+      </div>
     </aside>
   );
 }
