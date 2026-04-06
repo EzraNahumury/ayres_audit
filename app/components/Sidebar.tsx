@@ -24,8 +24,8 @@ const menuSections = [
   {
     title: "General Menu",
     items: [
-      { label: "List Sales/CS", href: "/dashboard/sales", icon: Users },
-      { label: "Divisi Perusahaan", href: "/dashboard/divisi", icon: Building2 },
+      { label: "Data Customer", href: "/dashboard/sales", icon: Users },
+      { label: "Ayres Agent", href: "/dashboard/agent", icon: Building2 },
       { label: "Roles", href: "/dashboard/roles", icon: Shield },
     ],
   },

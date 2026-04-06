@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     "libsignal",
     "protobufjs",
     "link-preview-js",
+    "mysql2",
   ],
 };
 

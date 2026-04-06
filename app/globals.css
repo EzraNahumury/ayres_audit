@@ -25,3 +25,105 @@ body {
   background: #ccc;
   border-radius: 10px;
 }
+
+/* Agent Markdown Styles */
+.agent-md table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-size: 14px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.agent-md thead {
+  background: #f3f4f6;
+}
+
+.agent-md th {
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: #111827;
+  border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.agent-md td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+}
+
+.agent-md tr:last-child td {
+  border-bottom: none;
+}
+
+.agent-md tr:hover td {
+  background: #f9fafb;
+}
+
+.agent-md p {
+  margin: 8px 0;
+}
+
+.agent-md ul, .agent-md ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.agent-md li {
+  margin: 4px 0;
+}
+
+.agent-md strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+.agent-md code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #e11d48;
+}
+
+.agent-md pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.agent-md pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+.agent-md h1, .agent-md h2, .agent-md h3 {
+  color: #111827;
+  margin: 16px 0 8px;
+}
+
+.agent-md h1 { font-size: 20px; }
+.agent-md h2 { font-size: 17px; }
+.agent-md h3 { font-size: 15px; }
+
+.agent-md blockquote {
+  border-left: 3px solid #8b5cf6;
+  padding-left: 12px;
+  color: #6b7280;
+  margin: 8px 0;
+}
+
+.agent-md hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 16px 0;
+}
