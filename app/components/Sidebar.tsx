@@ -13,28 +13,28 @@ import {
   QrCode,
   LogOut,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const menuSections = [
   {
     title: "Analisa Data",
     items: [
-      { label: "Audital Work", href: "/dashboard/audital-work", icon: BarChart3 },
+      { label: "Audital Work", href: "/dashboard/audital-work", icon: BarChart3, perm: "audital_work" },
     ],
   },
   {
     title: "General Menu",
     items: [
-      { label: "Data Customer", href: "/dashboard/sales", icon: Users },
-      { label: "Ayres Agent", href: "/dashboard/agent", icon: Building2 },
-      { label: "Roles", href: "/dashboard/roles", icon: Shield },
+      { label: "Data Customer", href: "/dashboard/sales", icon: Users, perm: "data_customer" },
+      { label: "Ayres Agent", href: "/dashboard/agent", icon: Building2, perm: "ayres_agent" },
+      { label: "Roles", href: "/dashboard/roles", icon: Shield, perm: "roles" },
     ],
   },
   {
     title: "AI Settings",
     items: [
-      { label: "AI Settings", href: "/dashboard/ai-settings", icon: Settings },
+      { label: "AI Settings", href: "/dashboard/ai-settings", icon: Settings, perm: "ai_settings" },
     ],
   },
 ];
@@ -42,6 +42,15 @@ const menuSections = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [userPerms, setUserPerms] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/auth").then(r => r.json()).then(data => {
+      if (data.user?.permissions) setUserPerms(data.user.permissions);
+    }).catch(() => {});
+  }, []);
+
+  const hasPerm = (perm: string) => userPerms.includes("all") || userPerms.includes(perm);
 
   const handleLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
@@ -102,7 +111,7 @@ export default function Sidebar() {
       </div>
 
       {/* Connect WhatsApp */}
-      <div style={{ padding: "12px 12px 4px" }}>
+      {hasPerm("connect_wa") && <div style={{ padding: "12px 12px 4px" }}>
         <Link
           href="/dashboard/connect"
           style={{
@@ -121,7 +130,7 @@ export default function Sidebar() {
           <QrCode style={{ width: 16, height: 16 }} />
           Connect WhatsApp
         </Link>
-      </div>
+      </div>}
 
       {/* Menu */}
       <nav style={{ flex: 1, overflowY: "auto", padding: "8px 12px 16px" }}>
@@ -154,7 +163,7 @@ export default function Sidebar() {
             </button>
 
             {openSections[section.title] &&
-              section.items.map((item) => {
+              section.items.filter((item) => hasPerm(item.perm)).map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
                 return (
