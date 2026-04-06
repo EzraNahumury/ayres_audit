@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(node -e \"const b = require\\('@whiskeysockets/baileys'\\); console.log\\(Object.keys\\(b\\).filter\\(k => k.includes\\('make'\\) || k.includes\\('useMulti'\\) || k.includes\\('default'\\) || k === 'default'\\).join\\(', '\\)\\)\")",
+      "Bash(node -e \"import\\('@whiskeysockets/baileys'\\).then\\(b => console.log\\(typeof b.makeWASocket, typeof b.useMultiFileAuthState, typeof b.default\\)\\)\")",
+      "Bash(node -e \"import\\('qrcode'\\).then\\(q => console.log\\(typeof q.toDataURL, typeof q.default?.toDataURL\\)\\)\")",
+      "Bash(npx tsc:*)",
+      "Bash(npm ls:*)"
     ]
   }
 }

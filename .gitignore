@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# whatsapp session data
+/wa_sessions
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
