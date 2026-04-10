@@ -57,14 +57,13 @@ Ayres Audit hadir sebagai solusi terpadu yang menghubungkan WhatsApp, manajemen 
 │   │   (MySQL)    │         └──────────────┬───────────────┘    │
 │   └──────┬───────┘                        │                     │
 │          │                       ┌────────┴────────┐           │
-│          │ Auto-assign           │  • Toggle online │           │
-│          ▼                       │  • Balas kontak  │           │
-│   ┌──────────────┐               │    milik sendiri │           │
-│   │ CS YANG      │               │  • Lihat data    │           │
-│   │ ONLINE &     │               │    customer      │           │
-│   │ LOAD TERKECIL│               │  • Lihat AI      │           │
-│   └──────────────┘               │    summary       │           │
-│                                  └─────────────────┘           │
+│          │ Auto-assign           │  • Toggle online/offline     │
+│          ▼                       │  • Lihat & balas kontak      │
+│   ┌──────────────┐               │    milik sendiri saja        │
+│   │ CS YANG      │               │  • Lihat customer sendiri    │
+│   │ ONLINE &     │               │  • Lihat distribusi          │
+│   │ LOAD TERKECIL│               └─────────────────────────────┘│
+│   └──────────────┘                                               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -196,10 +195,9 @@ Ayres Audit hadir sebagai solusi terpadu yang menghubungkan WhatsApp, manajemen 
 ### 1. Audital Work
 Monitor dan balas chat WhatsApp secara real-time.
 
-- Semua CS melihat seluruh daftar kontak yang masuk
-- Hanya CS yang **di-assign** ke kontak tersebut yang bisa membalas
-- CS lain melihat notifikasi *"Ditangani oleh [nama CS]"* dan input pesan terkunci
-- Badge nama CS tampil di setiap kontak pada daftar
+- **CS hanya melihat kontak yang di-assign ke mereka** — tidak ada kontak milik CS lain yang muncul
+- **Super Admin melihat semua kontak** dari seluruh CS
+- Hanya CS yang di-assign ke kontak tersebut yang bisa membalas — kontak unassigned menampilkan notifikasi terkunci
 - Auto-refresh pesan setiap **2 detik**, kontak setiap **5 detik**
 
 ---
@@ -227,8 +225,10 @@ Manajemen data CS agent.
 ---
 
 ### 4. Data Customer
-Direktori lengkap semua pelanggan yang pernah berinteraksi.
+Direktori pelanggan yang pernah berinteraksi.
 
+- **CS hanya melihat customer miliknya** — sesuai dengan kontak yang di-assign
+- **Super Admin melihat semua customer**
 - Nama, nomor WhatsApp, waktu chat pertama, chat terakhir, total pesan
 - **Edit nama kontak** inline langsung dari tabel
 - Resolusi nomor LID (format internal WhatsApp) ke nomor telepon nyata

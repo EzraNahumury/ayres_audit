@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { cookies } from "next/headers";
+
+function parseUser(token: string | undefined) {
+  if (!token) return null;
+  try {
+    return JSON.parse(Buffer.from(token, "base64").toString());
+  } catch {
+    return null;
+  }
+}
 
 // PATCH /api/contacts — update contact name
 export async function PATCH(request: Request) {
@@ -15,8 +25,20 @@ export async function PATCH(request: Request) {
   }
 }
 
+// GET /api/contacts
+// Admin → semua kontak
+// CS   → hanya kontak yang di-assign ke mereka
 export async function GET() {
   try {
+    const cookieStore = await cookies();
+    const user = parseUser(cookieStore.get("auth_token")?.value);
+    const isAdmin = user?.permissions?.includes("all") ?? false;
+
+    // CS filter: only their assigned contacts
+    const whereClause = (!isAdmin && user?.id)
+      ? `WHERE ca.user_id = ${Number(user.id)}`
+      : "";
+
     const rows = await query(`
       SELECT
         c.jid,
@@ -39,8 +61,10 @@ export async function GET() {
       )
       LEFT JOIN contact_assignments ca ON ca.contact_jid = c.jid
       LEFT JOIN users u ON u.id = ca.user_id
+      ${whereClause}
       ORDER BY m_last.timestamp DESC
     `);
+
     return NextResponse.json(rows);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

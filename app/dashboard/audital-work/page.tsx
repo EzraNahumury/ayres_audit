@@ -324,11 +324,6 @@ export default function AuditalWorkPage() {
                       <span style={{ fontSize: 13, color: "#667781", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                         {c.last_message || "—"}
                       </span>
-                      {c.assigned_cs_name && (
-                        <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 999, background: c.assigned_cs_id === currentUser?.id ? "#dcfce7" : "#f3f4f6", color: c.assigned_cs_id === currentUser?.id ? "#16a34a" : "#9ca3af", flexShrink: 0, whiteSpace: "nowrap" }}>
-                          {c.assigned_cs_id === currentUser?.id ? "Saya" : c.assigned_cs_name}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </button>
