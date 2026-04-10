@@ -92,24 +92,9 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              background: "#3b82f6",
-              borderRadius: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <BarChart3 style={{ width: 20, height: 20, color: "#fff" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>Ayres</div>
-            <div style={{ fontSize: 10, color: "#9ca3af" }}>Auto Audit System</div>
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <img src="/logo/logo.png" alt="Ayres" style={{ width: "100%", maxWidth: 160, height: "auto", objectFit: "contain", filter: "invert(1)" }} />
+          <div style={{ fontSize: 10, color: "#9ca3af" }}>Auto Audit System</div>
         </div>
         <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>version: 1.0.0</div>
       </div>
