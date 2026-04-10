@@ -32,7 +32,7 @@ const menuSections = [
       { label: "Data Customer", href: "/dashboard/sales", icon: Users, perm: "data_customer" },
       { label: "Ayres Agent", href: "/dashboard/agent", icon: Building2, perm: "ayres_agent" },
       { label: "Roles", href: "/dashboard/roles", icon: Shield, perm: "roles" },
-      { label: "Person CS", href: "/dashboard/person-cs", icon: UserCheck, perm: "roles" },
+      { label: "Person CS", href: "/dashboard/person-cs", icon: UserCheck, perm: "audital_work" },
     ],
   },
   {

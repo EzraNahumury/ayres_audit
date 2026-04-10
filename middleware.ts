@@ -8,7 +8,7 @@ const routePermissions: Record<string, string> = {
   "/dashboard/sales": "data_customer",
   "/dashboard/agent": "ayres_agent",
   "/dashboard/roles": "roles",
-  "/dashboard/person-cs": "roles",
+  "/dashboard/person-cs": "audital_work",
   "/dashboard/ai-settings": "ai_settings",
 };
 

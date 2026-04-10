@@ -16,16 +16,15 @@ async function ensureCSRole() {
   } else {
     roleId = existing[0].id;
   }
-  // Ensure audital_work permission exists for this role (check first to avoid duplicates)
-  const permExists = await query<any[]>(
-    "SELECT id FROM role_permissions WHERE role_id = ? AND permission = 'audital_work' LIMIT 1",
-    [roleId]
-  );
-  if (permExists.length === 0) {
-    await query(
-      "INSERT INTO role_permissions (role_id, permission) VALUES (?, 'audital_work')",
-      [roleId]
+  // Ensure required permissions exist for CS role
+  for (const perm of ["audital_work", "data_customer"]) {
+    const exists = await query<any[]>(
+      "SELECT id FROM role_permissions WHERE role_id = ? AND permission = ? LIMIT 1",
+      [roleId, perm]
     );
+    if (exists.length === 0) {
+      await query("INSERT INTO role_permissions (role_id, permission) VALUES (?, ?)", [roleId, perm]);
+    }
   }
 }
 

@@ -12,8 +12,11 @@ interface CSPerson {
   assigned_contacts: number;
 }
 
+interface CurrentUser { id: number; name: string; permissions: string[]; }
+
 export default function PersonCSPage() {
   const [persons, setPersons] = useState<CSPerson[]>([]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -32,7 +35,12 @@ export default function PersonCSPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    fetch("/api/auth").then(r => r.json()).then(d => { if (d.user) setCurrentUser(d.user); }).catch(() => {});
+    loadData();
+  }, [loadData]);
+
+  const isAdmin = currentUser?.permissions?.includes("all") ?? false;
 
   const openModal = () => {
     setFormName(""); setFormUsername(""); setFormPassword(""); setError(""); setShowModal(true);
@@ -95,12 +103,14 @@ export default function PersonCSPage() {
             <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Data CS yang digunakan untuk distribusi kontak</p>
           </div>
         </div>
-        <button
-          onClick={openModal}
-          style={{ display: "flex", alignItems: "center", gap: 8, background: "#8b5cf6", color: "#fff", padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer" }}
-        >
-          <Plus style={{ width: 16, height: 16 }} /> Tambah CS
-        </button>
+        {isAdmin && (
+          <button
+            onClick={openModal}
+            style={{ display: "flex", alignItems: "center", gap: 8, background: "#8b5cf6", color: "#fff", padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer" }}
+          >
+            <Plus style={{ width: 16, height: 16 }} /> Tambah CS
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -161,34 +171,44 @@ export default function PersonCSPage() {
                       )}
                     </div>
                   </td>
-                  {/* Status toggle */}
+                  {/* Status toggle — admin bisa toggle siapapun, CS hanya diri sendiri */}
                   <td style={{ padding: "14px 16px" }}>
-                    <button
-                      onClick={() => handleToggleOnline(p)}
-                      title={p.is_online ? "Klik untuk set Offline" : "Klik untuk set Online"}
-                      style={{
-                        position: "relative", width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
-                        background: p.is_online ? "#22c55e" : "#d1d5db", transition: "background 0.2s", padding: 0,
-                      }}
-                    >
-                      <span style={{
-                        position: "absolute", top: 3, left: p.is_online ? 23 : 3,
-                        width: 18, height: 18, borderRadius: "50%", background: "#fff",
-                        transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                        display: "block",
-                      }} />
-                    </button>
-                    <div style={{ fontSize: 10, color: p.is_online ? "#16a34a" : "#9ca3af", marginTop: 3, fontWeight: 600 }}>
-                      {p.is_online ? "Online" : "Offline"}
-                    </div>
+                    {(isAdmin || p.id === currentUser?.id) ? (
+                      <>
+                        <button
+                          onClick={() => handleToggleOnline(p)}
+                          title={p.is_online ? "Klik untuk set Offline" : "Klik untuk set Online"}
+                          style={{
+                            position: "relative", width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
+                            background: p.is_online ? "#22c55e" : "#d1d5db", transition: "background 0.2s", padding: 0,
+                          }}
+                        >
+                          <span style={{
+                            position: "absolute", top: 3, left: p.is_online ? 23 : 3,
+                            width: 18, height: 18, borderRadius: "50%", background: "#fff",
+                            transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                            display: "block",
+                          }} />
+                        </button>
+                        <div style={{ fontSize: 10, color: p.is_online ? "#16a34a" : "#9ca3af", marginTop: 3, fontWeight: 600 }}>
+                          {p.is_online ? "Online" : "Offline"}
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 12, color: p.is_online ? "#16a34a" : "#9ca3af", fontWeight: 600 }}>
+                        {p.is_online ? "Online" : "Offline"}
+                      </span>
+                    )}
                   </td>
                   <td style={{ padding: "14px 16px" }}>
-                    <button
-                      onClick={() => handleDelete(p)}
-                      style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 12px", border: "1px solid #fecaca", borderRadius: 6, background: "#fff5f5", color: "#ef4444", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
-                    >
-                      <Trash2 style={{ width: 13, height: 13 }} /> Hapus
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDelete(p)}
+                        style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 12px", border: "1px solid #fecaca", borderRadius: 6, background: "#fff5f5", color: "#ef4444", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
+                      >
+                        <Trash2 style={{ width: 13, height: 13 }} /> Hapus
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
