@@ -19,6 +19,8 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true);
   const [editingJid, setEditingJid] = useState<string | null>(null);
   const [editPhone, setEditPhone] = useState("");
+  const [editingNameJid, setEditingNameJid] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
   const [saving, setSaving] = useState(false);
 
   const loadCustomers = () => {
@@ -32,6 +34,23 @@ export default function SalesPage() {
 
   // Check if phone is a LID (not a real number)
   const isLid = (c: Customer) => c.jid.endsWith("@lid") && (c.phone.length > 15 || !/^62\d+$/.test(c.phone));
+
+  // Save name
+  const handleSaveName = async (c: Customer) => {
+    if (!editName.trim()) return;
+    setSaving(true);
+    try {
+      await fetch("/api/contacts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jid: c.jid, name: editName.trim() }),
+      });
+      setEditingNameJid(null);
+      setEditName("");
+      loadCustomers();
+    } catch { /* ignore */ }
+    setSaving(false);
+  };
 
   // Save phone mapping
   const handleSavePhone = async (c: Customer) => {
@@ -116,7 +135,34 @@ export default function SalesPage() {
                         <div style={{ width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#fff", backgroundImage: "linear-gradient(135deg, #00a884, #25d366)", flexShrink: 0 }}>
                           {(c.name || c.phone)[0].toUpperCase()}
                         </div>
-                        <span style={{ fontSize: 14, fontWeight: 500, color: "#111827" }}>{c.name || "-"}</span>
+                        {editingNameJid === c.jid ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input
+                              type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(c); if (e.key === "Escape") { setEditingNameJid(null); setEditName(""); } }}
+                              autoFocus
+                              style={{ width: 160, padding: "4px 8px", border: "1px solid #3b82f6", borderRadius: 4, fontSize: 13, outline: "none" }}
+                            />
+                            <button onClick={() => handleSaveName(c)} disabled={saving}
+                              style={{ padding: 4, background: "#dcfce7", border: "none", borderRadius: 4, cursor: "pointer", display: "flex" }}>
+                              <Check style={{ width: 14, height: 14, color: "#16a34a" }} />
+                            </button>
+                            <button onClick={() => { setEditingNameJid(null); setEditName(""); }}
+                              style={{ padding: 4, background: "#fef2f2", border: "none", borderRadius: 4, cursor: "pointer", display: "flex" }}>
+                              <X style={{ width: 14, height: 14, color: "#ef4444" }} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 14, fontWeight: 500, color: "#111827" }}>{c.name || <span style={{ color: "#9ca3af", fontStyle: "italic" }}>Belum ada nama</span>}</span>
+                            <button onClick={() => { setEditingNameJid(c.jid); setEditName(c.name || ""); }}
+                              style={{ padding: 3, background: "none", border: "none", cursor: "pointer", display: "flex", opacity: 0.4 }}
+                              title="Edit nama"
+                            >
+                              <Edit style={{ width: 13, height: 13, color: "#6b7280" }} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td style={{ padding: "12px 16px" }}>

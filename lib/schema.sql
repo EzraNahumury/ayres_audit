@@ -73,3 +73,15 @@ CREATE TABLE IF NOT EXISTS cs_audit (
   INDEX idx_contact (contact_jid),
   INDEX idx_period (period)
 ) ENGINE=InnoDB;
+
+-- =============================================
+-- Tabel distribusi kontak ke CS
+-- =============================================
+CREATE TABLE IF NOT EXISTS contact_assignments (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  contact_jid VARCHAR(50) NOT NULL UNIQUE,
+  user_id     BIGINT NOT NULL,
+  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user (user_id),
+  INDEX idx_contact (contact_jid)
+) ENGINE=InnoDB;

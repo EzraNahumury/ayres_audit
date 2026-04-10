@@ -79,6 +79,29 @@ export async function initDatabase() {
     ) ENGINE=InnoDB
   `);
 
+  await conn.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online TINYINT(1) NOT NULL DEFAULT 1`);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS cs_attendance (
+      id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+      user_id  BIGINT NOT NULL,
+      date     DATE NOT NULL,
+      UNIQUE KEY uq_user_date (user_id, date),
+      INDEX idx_date (date)
+    ) ENGINE=InnoDB
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS contact_assignments (
+      id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+      contact_jid VARCHAR(50) NOT NULL UNIQUE,
+      user_id     BIGINT NOT NULL,
+      assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_user (user_id),
+      INDEX idx_contact (contact_jid)
+    ) ENGINE=InnoDB
+  `);
+
   await conn.end();
   return { success: true };
 }

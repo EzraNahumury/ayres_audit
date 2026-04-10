@@ -12,6 +12,8 @@ import {
   ChevronRight,
   QrCode,
   LogOut,
+  GitBranch,
+  UserCheck,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -21,6 +23,7 @@ const menuSections = [
     title: "Analisa Data",
     items: [
       { label: "Audital Work", href: "/dashboard/audital-work", icon: BarChart3, perm: "audital_work" },
+      { label: "CS Distribution", href: "/dashboard/cs-distribution", icon: GitBranch, perm: "audital_work" },
     ],
   },
   {
@@ -29,6 +32,7 @@ const menuSections = [
       { label: "Data Customer", href: "/dashboard/sales", icon: Users, perm: "data_customer" },
       { label: "Ayres Agent", href: "/dashboard/agent", icon: Building2, perm: "ayres_agent" },
       { label: "Roles", href: "/dashboard/roles", icon: Shield, perm: "roles" },
+      { label: "Person CS", href: "/dashboard/person-cs", icon: UserCheck, perm: "roles" },
     ],
   },
   {

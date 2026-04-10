@@ -21,6 +21,14 @@ interface Contact {
   last_message: string | null;
   last_message_at: string | null;
   total_messages: number;
+  assigned_cs_id: number | null;
+  assigned_cs_name: string | null;
+}
+
+interface CurrentUser {
+  id: number;
+  name: string;
+  permissions: string[];
 }
 
 interface Message {
@@ -46,6 +54,7 @@ export default function AuditalWorkPage() {
   const [sending, setSending] = useState(false);
   const [waConnected, setWaConnected] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const prevMsgCountRef = useRef(0);
@@ -104,8 +113,18 @@ export default function AuditalWorkPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Check if current user can reply to selected contact
+  const canReply = (contact: Contact | null) => {
+    if (!contact || !currentUser) return false;
+    if (currentUser.permissions.includes("all")) return true;
+    return contact.assigned_cs_id === currentUser.id;
+  };
+
   // Initial load
   useEffect(() => {
+    fetch("/api/auth").then(r => r.json()).then(d => {
+      if (d.user) setCurrentUser(d.user);
+    }).catch(() => {});
     checkWA();
     loadContacts();
   }, [checkWA, loadContacts]);
@@ -302,9 +321,14 @@ export default function AuditalWorkPage() {
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
                       <CheckCheck style={{ width: 16, height: 16, color: "#53bdeb", flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, color: "#667781", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 13, color: "#667781", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                         {c.last_message || "—"}
                       </span>
+                      {c.assigned_cs_name && (
+                        <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 999, background: c.assigned_cs_id === currentUser?.id ? "#dcfce7" : "#f3f4f6", color: c.assigned_cs_id === currentUser?.id ? "#16a34a" : "#9ca3af", flexShrink: 0, whiteSpace: "nowrap" }}>
+                          {c.assigned_cs_id === currentUser?.id ? "Saya" : c.assigned_cs_name}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -409,35 +433,44 @@ export default function AuditalWorkPage() {
             </div>
 
             {/* Input Area */}
-            <div style={{ background: "#f0f2f5", padding: "6px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer" }}>
-                <Smile style={{ width: 24, height: 24, color: "#54656f" }} />
-              </button>
-              <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer" }}>
-                <Paperclip style={{ width: 24, height: 24, color: "#54656f", transform: "rotate(45deg)" }} />
-              </button>
-              <input
-                type="text"
-                placeholder="Ketik pesan"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={!waConnected}
-                style={{
-                  flex: 1, padding: "9px 12px", border: "none", borderRadius: 8,
-                  fontSize: 15, outline: "none", background: "#fff",
-                  color: "#111b21",
-                  opacity: waConnected ? 1 : 0.5,
-                }}
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || sending || !waConnected}
-                style={{ padding: 8, background: "none", border: "none", cursor: input.trim() && !sending && waConnected ? "pointer" : "default" }}
-              >
-                <Send style={{ width: 24, height: 24, color: input.trim() && waConnected ? "#00a884" : "#8696a0" }} />
-              </button>
-            </div>
+            {canReply(selected) ? (
+              <div style={{ background: "#f0f2f5", padding: "6px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer" }}>
+                  <Smile style={{ width: 24, height: 24, color: "#54656f" }} />
+                </button>
+                <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer" }}>
+                  <Paperclip style={{ width: 24, height: 24, color: "#54656f", transform: "rotate(45deg)" }} />
+                </button>
+                <input
+                  type="text"
+                  placeholder="Ketik pesan"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={!waConnected}
+                  style={{
+                    flex: 1, padding: "9px 12px", border: "none", borderRadius: 8,
+                    fontSize: 15, outline: "none", background: "#fff",
+                    color: "#111b21",
+                    opacity: waConnected ? 1 : 0.5,
+                  }}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || sending || !waConnected}
+                  style={{ padding: 8, background: "none", border: "none", cursor: input.trim() && !sending && waConnected ? "pointer" : "default" }}
+                >
+                  <Send style={{ width: 24, height: 24, color: input.trim() && waConnected ? "#00a884" : "#8696a0" }} />
+                </button>
+              </div>
+            ) : (
+              <div style={{ background: "#f0f2f5", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexShrink: 0, borderTop: "1px solid #e5e7eb" }}>
+                <div style={{ fontSize: 13, color: "#667781", display: "flex", alignItems: "center", gap: 6 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#667781" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  Ditangani oleh <strong style={{ color: "#374151" }}>{selected?.assigned_cs_name || "CS lain"}</strong> &mdash; Anda tidak dapat membalas percakapan ini
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* No contact selected */

@@ -4,9 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 const routePermissions: Record<string, string> = {
   "/dashboard/connect": "connect_wa",
   "/dashboard/audital-work": "audital_work",
+  "/dashboard/cs-distribution": "audital_work",
   "/dashboard/sales": "data_customer",
   "/dashboard/agent": "ayres_agent",
   "/dashboard/roles": "roles",
+  "/dashboard/person-cs": "roles",
   "/dashboard/ai-settings": "ai_settings",
 };
 

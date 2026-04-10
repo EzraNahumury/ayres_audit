@@ -78,6 +78,52 @@ async function getKnowledgeBase(): Promise<string> {
     }
   } catch { /* ignore */ }
 
+  // 4. CS agents + their assigned contacts
+  try {
+    const csAgents: any[] = await query(`
+      SELECT DISTINCT u.id, u.name, u.username, u.is_online,
+        COUNT(ca.contact_jid) AS total_assigned
+      FROM users u
+      INNER JOIN roles r ON r.name = u.role
+      INNER JOIN role_permissions rp ON rp.role_id = r.id AND rp.permission = 'audital_work'
+      LEFT JOIN contact_assignments ca ON ca.user_id = u.id
+      GROUP BY u.id, u.name, u.username, u.is_online
+      ORDER BY u.name ASC
+    `);
+
+    if (csAgents.length > 0) {
+      parts.push(`\n=== DATA CS AGENT (${csAgents.length} CS) ===`);
+      for (const cs of csAgents) {
+        const status = cs.is_online ? "Online" : "Offline";
+        parts.push(`- ${cs.name} (@${cs.username}): status=${status}, menangani ${cs.total_assigned} customer`);
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 5. Contact assignments (who handles which customer)
+  try {
+    const assignments: any[] = await query(`
+      SELECT
+        COALESCE(c.name, lm.name, c.phone) AS customer_name,
+        c.phone,
+        u.name AS cs_name,
+        ca.assigned_at
+      FROM contact_assignments ca
+      INNER JOIN contacts c ON c.jid = ca.contact_jid
+      LEFT JOIN lid_mapping lm ON lm.lid = REPLACE(c.jid, '@lid', '')
+      INNER JOIN users u ON u.id = ca.user_id
+      ORDER BY ca.assigned_at DESC
+    `);
+
+    if (assignments.length > 0) {
+      parts.push(`\n=== PEMBAGIAN CUSTOMER KE CS ===`);
+      for (const a of assignments) {
+        const tgl = new Date(a.assigned_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+        parts.push(`- ${a.customer_name} (${a.phone}) → ditangani oleh: ${a.cs_name} (sejak ${tgl})`);
+      }
+    }
+  } catch { /* ignore */ }
+
   return parts.join("\n");
 }
 

@@ -29,6 +29,31 @@ export async function saveMessage(data: MessageData) {
     [data.contactJid, phone, data.pushName || null]
   );
 
+  // Auto-assign new contact to least-loaded CS (only once per contact)
+  const existing = await query<any[]>(
+    "SELECT id FROM contact_assignments WHERE contact_jid = ? LIMIT 1",
+    [data.contactJid]
+  );
+  if (existing.length === 0) {
+    const csUsers = await query<any[]>(`
+      SELECT u.id, COUNT(ca.contact_jid) AS load_count
+      FROM users u
+      INNER JOIN roles r ON r.name = u.role
+      INNER JOIN role_permissions rp ON rp.role_id = r.id AND rp.permission = 'audital_work'
+      LEFT JOIN contact_assignments ca ON ca.user_id = u.id
+      WHERE u.is_online = 1
+      GROUP BY u.id
+      ORDER BY load_count ASC
+      LIMIT 1
+    `);
+    if (csUsers.length > 0) {
+      await query(
+        "INSERT IGNORE INTO contact_assignments (contact_jid, user_id) VALUES (?, ?)",
+        [data.contactJid, csUsers[0].id]
+      );
+    }
+  }
+
   // Insert message (ignore duplicate)
   const ts = new Date(data.timestamp * 1000);
 

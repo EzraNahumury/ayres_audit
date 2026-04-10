@@ -1,6 +1,20 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
+// PATCH /api/contacts — update contact name
+export async function PATCH(request: Request) {
+  try {
+    const { jid, name } = await request.json();
+    if (!jid || !name?.trim()) {
+      return NextResponse.json({ error: "jid dan name wajib diisi" }, { status: 400 });
+    }
+    await query("UPDATE contacts SET name = ? WHERE jid = ?", [name.trim(), jid]);
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 export async function GET() {
   try {
     const rows = await query(`
@@ -15,12 +29,16 @@ export async function GET() {
         m_last.body AS last_message,
         m_last.timestamp AS last_message_at,
         m_last.from_me AS last_from_me,
-        (SELECT COUNT(*) FROM messages WHERE contact_jid = c.jid) AS total_messages
+        (SELECT COUNT(*) FROM messages WHERE contact_jid = c.jid) AS total_messages,
+        ca.user_id AS assigned_cs_id,
+        u.name AS assigned_cs_name
       FROM contacts c
       LEFT JOIN lid_mapping lm ON lm.lid = REPLACE(c.jid, '@lid', '')
       LEFT JOIN messages m_last ON m_last.id = (
         SELECT id FROM messages WHERE contact_jid = c.jid ORDER BY timestamp DESC LIMIT 1
       )
+      LEFT JOIN contact_assignments ca ON ca.contact_jid = c.jid
+      LEFT JOIN users u ON u.id = ca.user_id
       ORDER BY m_last.timestamp DESC
     `);
     return NextResponse.json(rows);

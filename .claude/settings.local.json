@@ -22,7 +22,11 @@
       "Bash(\"C:/xampp/mysql/bin/mysql\" -u root ayres_audit -e \"SELECT id, contact_jid, from_me, message_type, body, timestamp FROM messages ORDER BY timestamp DESC LIMIT 10;\")",
       "Bash(\"C:/xampp/mysql/bin/mysql\" -u root ayres_audit -e \"SELECT id, LEFT\\(contact_jid,20\\) as jid, from_me, message_type, LEFT\\(body,50\\) as body, timestamp FROM messages ORDER BY id DESC LIMIT 10;\")",
       "Bash(taskkill /F /PID 26724)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(find /d/ayres_audit/app/api -name \"route.ts\" -exec wc -l {} +)",
+      "Bash(grep -rh \"INSERT INTO\\\\|SELECT.*FROM\\\\|CREATE TABLE\" /d/ayres_audit/app/api /d/ayres_audit/lib/*.ts)",
+      "Bash(grep -oE \"\\(FROM|INTO|TABLE\\) \\\\`?[a-z_]+\\\\`?\")",
+      "Bash(ls:*)"
     ]
   }
 }
