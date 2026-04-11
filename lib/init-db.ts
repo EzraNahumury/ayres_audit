@@ -102,6 +102,17 @@ export async function initDatabase() {
     ) ENGINE=InnoDB
   `);
 
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS lid_mapping (
+      id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+      lid      VARCHAR(50)  NOT NULL UNIQUE,
+      phone    VARCHAR(20) NOT NULL,
+      name     VARCHAR(255) DEFAULT NULL,
+      INDEX idx_lid (lid),
+      INDEX idx_phone (phone)
+    ) ENGINE=InnoDB
+  `);
+
   await conn.end();
   return { success: true };
 }

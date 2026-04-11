@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
-import { getWaState } from "@/lib/wa-state";
+import { callWaWorker } from "@/lib/wa-worker-client";
 
 export async function POST(request: Request) {
   try {
     const { jid, message } = await request.json();
     if (!jid || !message) return NextResponse.json({ error: "jid and message required" }, { status: 400 });
 
-    const state = getWaState();
-    if (state.status !== "connected" || !state.socket) {
-      return NextResponse.json({ error: "WhatsApp not connected" }, { status: 503 });
-    }
+    const response = await callWaWorker("/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jid, message }),
+    });
 
-    await state.socket.sendMessage(jid, { text: message });
-    return NextResponse.json({ success: true });
-  } catch (err: any) {
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (err) {
     console.error("[WA] Send error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "send failed" }, { status: 500 });
   }
 }

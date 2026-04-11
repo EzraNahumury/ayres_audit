@@ -11,7 +11,7 @@ function parseUser(token: string | undefined) {
   }
 }
 
-// PATCH /api/contacts — update contact name
+// PATCH /api/contacts - update contact name
 export async function PATCH(request: Request) {
   try {
     const { jid, name } = await request.json();
@@ -25,21 +25,31 @@ export async function PATCH(request: Request) {
   }
 }
 
-// GET /api/contacts
-// Admin → semua kontak
-// CS   → hanya kontak yang di-assign ke mereka
+type ContactRow = {
+  jid: string;
+  phone: string;
+  name: string | null;
+  first_chat_at: string | null;
+  assigned_cs_id: number | null;
+  assigned_cs_name: string | null;
+};
+
+type MessageStatRow = {
+  contact_jid: string;
+  total_messages: number;
+  last_message: string | null;
+  last_message_at: string | null;
+  last_from_me: number;
+};
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
     const user = parseUser(cookieStore.get("auth_token")?.value);
     const isAdmin = user?.permissions?.includes("all") ?? false;
 
-    // CS filter: only their assigned contacts
-    const whereClause = (!isAdmin && user?.id)
-      ? `WHERE ca.user_id = ${Number(user.id)}`
-      : "";
-
-    const rows = await query(`
+    const contacts = await query<ContactRow[]>(
+      `
       SELECT
         c.jid,
         CASE
@@ -48,22 +58,103 @@ export async function GET() {
         END AS phone,
         COALESCE(c.name, lm.name) AS name,
         c.created_at AS first_chat_at,
-        m_last.body AS last_message,
-        m_last.timestamp AS last_message_at,
-        m_last.from_me AS last_from_me,
-        (SELECT COUNT(*) FROM messages WHERE contact_jid = c.jid) AS total_messages,
         ca.user_id AS assigned_cs_id,
         u.name AS assigned_cs_name
       FROM contacts c
       LEFT JOIN lid_mapping lm ON lm.lid = REPLACE(c.jid, '@lid', '')
-      LEFT JOIN messages m_last ON m_last.id = (
-        SELECT id FROM messages WHERE contact_jid = c.jid ORDER BY timestamp DESC LIMIT 1
-      )
       LEFT JOIN contact_assignments ca ON ca.contact_jid = c.jid
       LEFT JOIN users u ON u.id = ca.user_id
-      ${whereClause}
-      ORDER BY m_last.timestamp DESC
-    `);
+      ${(!isAdmin && user?.id) ? "WHERE ca.user_id = ?" : ""}
+      ORDER BY c.created_at DESC
+      `,
+      (!isAdmin && user?.id) ? [Number(user.id)] : []
+    );
+
+    const stats = await query<MessageStatRow[]>(
+      `
+      SELECT
+        m.contact_jid,
+        COUNT(*) AS total_messages,
+        SUBSTRING_INDEX(GROUP_CONCAT(m.body ORDER BY m.timestamp DESC SEPARATOR '\u0001'), '\u0001', 1) AS last_message,
+        MAX(m.timestamp) AS last_message_at,
+        SUBSTRING_INDEX(GROUP_CONCAT(m.from_me ORDER BY m.timestamp DESC SEPARATOR ','), ',', 1) AS last_from_me
+      FROM messages m
+      GROUP BY m.contact_jid
+      `
+    );
+
+    const statMap = new Map<string, MessageStatRow>();
+    for (const stat of stats) {
+      statMap.set(stat.contact_jid, {
+        ...stat,
+        total_messages: Number(stat.total_messages || 0),
+        last_from_me: Number(stat.last_from_me || 0),
+      });
+    }
+
+    const grouped = new Map<string, {
+      jid: string;
+      phone: string;
+      name: string | null;
+      first_chat_at: string | null;
+      last_message: string | null;
+      last_message_at: string | null;
+      last_from_me: number;
+      total_messages: number;
+      assigned_cs_id: number | null;
+      assigned_cs_name: string | null;
+    }>();
+
+    for (const contact of contacts) {
+      const key = contact.phone || contact.jid;
+      const stat = statMap.get(contact.jid);
+      const existing = grouped.get(key);
+
+      if (!existing) {
+        grouped.set(key, {
+          jid: contact.jid.endsWith("@s.whatsapp.net") ? contact.jid : contact.jid,
+          phone: contact.phone,
+          name: contact.name,
+          first_chat_at: contact.first_chat_at,
+          last_message: stat?.last_message || null,
+          last_message_at: stat?.last_message_at || null,
+          last_from_me: stat?.last_from_me || 0,
+          total_messages: stat?.total_messages || 0,
+          assigned_cs_id: contact.assigned_cs_id,
+          assigned_cs_name: contact.assigned_cs_name,
+        });
+        continue;
+      }
+
+      if (contact.jid.endsWith("@s.whatsapp.net")) {
+        existing.jid = contact.jid;
+      }
+      if (!existing.name && contact.name) {
+        existing.name = contact.name;
+      }
+      if (!existing.assigned_cs_id && contact.assigned_cs_id) {
+        existing.assigned_cs_id = contact.assigned_cs_id;
+        existing.assigned_cs_name = contact.assigned_cs_name;
+      }
+      if (!existing.first_chat_at || (contact.first_chat_at && contact.first_chat_at < existing.first_chat_at)) {
+        existing.first_chat_at = contact.first_chat_at;
+      }
+      existing.total_messages += stat?.total_messages || 0;
+      if (
+        stat?.last_message_at &&
+        (!existing.last_message_at || new Date(stat.last_message_at).getTime() > new Date(existing.last_message_at).getTime())
+      ) {
+        existing.last_message = stat.last_message;
+        existing.last_message_at = stat.last_message_at;
+        existing.last_from_me = stat.last_from_me;
+      }
+    }
+
+    const rows = Array.from(grouped.values()).sort((a, b) => {
+      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return tb - ta;
+    });
 
     return NextResponse.json(rows);
   } catch (err: any) {

@@ -1,25 +1,12 @@
 import { NextResponse } from "next/server";
-import { getWaState } from "@/lib/wa-state";
-import path from "path";
+import { callWaWorker } from "@/lib/wa-worker-client";
 
 export async function POST() {
-  const state = getWaState();
-
-  if (state.socket) {
-    try { state.socket.ws?.close(); } catch { /* ignore */ }
-    state.socket = null;
-  }
-
-  state.status = "disconnected";
-  state.qr = null;
-  state.connecting = false;
-  state.initialized = false;
-  state.store = null;
-
   try {
-    const fs = await import("fs");
-    fs.rmSync(path.join(process.cwd(), "wa_sessions"), { recursive: true, force: true });
-  } catch { /* ignore */ }
-
-  return NextResponse.json({ success: true });
+    const response = await callWaWorker("/logout", { method: "POST" });
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "logout failed" }, { status: 500 });
+  }
 }

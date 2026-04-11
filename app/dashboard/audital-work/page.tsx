@@ -158,15 +158,22 @@ export default function AuditalWorkPage() {
     setInput("");
 
     try {
-      await fetch("/api/whatsapp/send", {
+      const res = await fetch("/api/whatsapp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jid: selected.jid, message: text }),
       });
+
+      if (!res.ok) {
+        throw new Error("Gagal mengirim pesan");
+      }
+
       // Quick refresh
       setTimeout(() => loadMessages(selected.jid, false), 800);
       setTimeout(() => loadContacts(), 1000);
-    } catch { /* ignore */ }
+    } catch {
+      setInput(text);
+    }
     setSending(false);
   };
 

@@ -41,7 +41,7 @@ export default function CSDistributionPage() {
 
   const loadData = useCallback(async (date: string) => {
     try {
-      const url = `/api/distribution${date !== today ? `?date=${date}` : ""}`;
+      const url = `/api/distribution?date=${date}`;
       const r = await fetch(url);
       const d = await r.json();
       if (d.cs_agents) setData(d);

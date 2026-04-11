@@ -11,12 +11,48 @@ interface MessageData {
   pushName?: string;
 }
 
+function normalizeJid(jid: string) {
+  const [user = "", server = ""] = jid.split("@");
+  const normalizedUser = user.split(":")[0];
+  return server ? `${normalizedUser}@${server}` : normalizedUser;
+}
+
+function normalizeTimestamp(timestamp: number | string | { low?: number; high?: number; toNumber?: () => number; toString?: () => string }) {
+  if (typeof timestamp === "number" && Number.isFinite(timestamp)) return timestamp;
+
+  if (typeof timestamp === "string") {
+    const parsed = Number(timestamp);
+    return Number.isFinite(parsed) ? parsed : Math.floor(Date.now() / 1000);
+  }
+
+  if (timestamp && typeof timestamp === "object") {
+    if (typeof timestamp.toNumber === "function") {
+      const parsed = timestamp.toNumber();
+      if (Number.isFinite(parsed)) return parsed;
+    }
+
+    if (typeof timestamp.low === "number") {
+      return timestamp.low;
+    }
+
+    if (typeof timestamp.toString === "function") {
+      const parsed = Number(timestamp.toString());
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+
+  return Math.floor(Date.now() / 1000);
+}
+
 export async function saveMessage(data: MessageData) {
+  const contactJid = normalizeJid(data.contactJid);
+  const senderJid = normalizeJid(data.senderJid);
+
   // Skip group chats
-  if (data.contactJid.endsWith("@g.us")) return;
+  if (contactJid.endsWith("@g.us")) return;
 
   // Extract phone number from JID
-  const phone = data.contactJid
+  const phone = contactJid
     .replace("@s.whatsapp.net", "")
     .replace("@lid", "");
 
@@ -26,13 +62,13 @@ export async function saveMessage(data: MessageData) {
      ON DUPLICATE KEY UPDATE
        name = COALESCE(VALUES(name), name),
        updated_at = NOW()`,
-    [data.contactJid, phone, data.pushName || null]
+    [contactJid, phone, data.pushName || null]
   );
 
   // Auto-assign new contact to least-loaded CS (only once per contact)
   const existing = await query<any[]>(
     "SELECT id FROM contact_assignments WHERE contact_jid = ? LIMIT 1",
-    [data.contactJid]
+    [contactJid]
   );
   if (existing.length === 0) {
     const csUsers = await query<any[]>(`
@@ -49,17 +85,17 @@ export async function saveMessage(data: MessageData) {
     if (csUsers.length > 0) {
       await query(
         "INSERT IGNORE INTO contact_assignments (contact_jid, user_id) VALUES (?, ?)",
-        [data.contactJid, csUsers[0].id]
+        [contactJid, csUsers[0].id]
       );
     }
   }
 
   // Insert message (ignore duplicate)
-  const ts = new Date(data.timestamp * 1000);
+  const ts = new Date(normalizeTimestamp(data.timestamp) * 1000);
 
   await query(
     `INSERT IGNORE INTO messages (message_id, contact_jid, sender_jid, from_me, message_type, body, timestamp)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [data.messageId, data.contactJid, data.senderJid, data.fromMe ? 1 : 0, data.messageType, data.body, ts]
+    [data.messageId, contactJid, senderJid, data.fromMe ? 1 : 0, data.messageType, data.body, ts]
   );
 }
