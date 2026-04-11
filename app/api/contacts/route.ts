@@ -11,6 +11,17 @@ function parseUser(token: string | undefined) {
   }
 }
 
+function sanitizeDisplayName(name: string | null) {
+  const normalized = name?.trim() || null;
+  if (!normalized) return null;
+
+  if (normalized === "Ayres Apparel Meta Ads") {
+    return null;
+  }
+
+  return normalized;
+}
+
 // PATCH /api/contacts - update contact name
 export async function PATCH(request: Request) {
   try {
@@ -114,7 +125,7 @@ export async function GET() {
         grouped.set(key, {
           jid: contact.jid.endsWith("@s.whatsapp.net") ? contact.jid : contact.jid,
           phone: contact.phone,
-          name: contact.name,
+          name: sanitizeDisplayName(contact.name),
           first_chat_at: contact.first_chat_at,
           last_message: stat?.last_message || null,
           last_message_at: stat?.last_message_at || null,
@@ -129,8 +140,8 @@ export async function GET() {
       if (contact.jid.endsWith("@s.whatsapp.net")) {
         existing.jid = contact.jid;
       }
-      if (!existing.name && contact.name) {
-        existing.name = contact.name;
+      if (!existing.name && sanitizeDisplayName(contact.name)) {
+        existing.name = sanitizeDisplayName(contact.name);
       }
       if (!existing.assigned_cs_id && contact.assigned_cs_id) {
         existing.assigned_cs_id = contact.assigned_cs_id;

@@ -11,6 +11,17 @@ interface MessageData {
   pushName?: string;
 }
 
+function sanitizeContactName(name?: string | null) {
+  const normalized = name?.trim() || null;
+  if (!normalized) return null;
+
+  const blockedNames = new Set([
+    "Ayres Apparel Meta Ads",
+  ]);
+
+  return blockedNames.has(normalized) ? null : normalized;
+}
+
 function normalizeJid(jid: string) {
   const [user = "", server = ""] = jid.split("@");
   const normalizedUser = user.split(":")[0];
@@ -62,7 +73,7 @@ export async function saveMessage(data: MessageData) {
      ON DUPLICATE KEY UPDATE
        name = COALESCE(VALUES(name), name),
        updated_at = NOW()`,
-    [contactJid, phone, data.pushName || null]
+    [contactJid, phone, sanitizeContactName(data.pushName)]
   );
 
   // Auto-assign new contact to least-loaded CS (only once per contact)

@@ -14,6 +14,17 @@ type CsUser = {
   is_online?: number;
 };
 
+function sanitizeDisplayName(name: string | null) {
+  const normalized = name?.trim() || null;
+  if (!normalized) return null;
+
+  if (normalized === "Ayres Apparel Meta Ads") {
+    return null;
+  }
+
+  return normalized;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -77,7 +88,14 @@ export async function GET(request: Request) {
           [cs.id, date]
         );
 
-        return { ...cs, contacts, contact_count: contacts.length };
+        return {
+          ...cs,
+          contacts: contacts.map((contact) => ({
+            ...contact,
+            name: sanitizeDisplayName(contact.name),
+          })),
+          contact_count: contacts.length,
+        };
       })
     );
 

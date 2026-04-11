@@ -67,6 +67,17 @@ function normalizeJid(jid) {
   return server ? `${normalizedUser}@${server}` : normalizedUser;
 }
 
+function sanitizeContactName(name) {
+  const normalized = typeof name === "string" ? name.trim() : "";
+  if (!normalized) return null;
+
+  const blockedNames = new Set([
+    "Ayres Apparel Meta Ads",
+  ]);
+
+  return blockedNames.has(normalized) ? null : normalized;
+}
+
 function getMessageTimestampSeconds(value) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value?.toNumber === "function") return value.toNumber();
@@ -125,7 +136,7 @@ async function saveMessage(data) {
      ON DUPLICATE KEY UPDATE
        name = COALESCE(VALUES(name), name),
        updated_at = NOW()`,
-    [contactJid, phone, data.pushName || null]
+    [contactJid, phone, sanitizeContactName(data.pushName)]
   );
 
   const existing = await query(
