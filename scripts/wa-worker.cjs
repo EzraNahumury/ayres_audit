@@ -11,19 +11,31 @@ const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, make
 
 const PORT = Number(process.env.WA_WORKER_PORT || 3311);
 const HOST = "127.0.0.1";
-const SESSION_DIR = path.join(process.cwd(), "wa_sessions");
-const LOG_FILE = path.join(SESSION_DIR, "worker.log");
+const SESSIONS_ROOT = path.join(process.cwd(), "wa_sessions");
+const LOG_FILE = path.join(SESSIONS_ROOT, "worker.log");
 
-fs.mkdirSync(SESSION_DIR, { recursive: true });
+const ACCOUNT_IDS = [1, 2, 3];
+const ACCOUNT_SLUGS = { 1: "account_1", 2: "account_2", 3: "account_3" };
 
-const state = {
-  qr: null,
-  status: "disconnected",
-  socket: null,
-  store: null,
-  connecting: false,
-  initialized: false,
-};
+fs.mkdirSync(SESSIONS_ROOT, { recursive: true });
+for (const id of ACCOUNT_IDS) {
+  fs.mkdirSync(path.join(SESSIONS_ROOT, ACCOUNT_SLUGS[id]), { recursive: true });
+}
+
+const accounts = new Map();
+for (const id of ACCOUNT_IDS) {
+  accounts.set(id, {
+    id,
+    slug: ACCOUNT_SLUGS[id],
+    qr: null,
+    status: "disconnected",
+    socket: null,
+    store: null,
+    connecting: false,
+    initialized: false,
+    phone: null,
+  });
+}
 
 let pool;
 
@@ -123,7 +135,7 @@ function extractBody(msg) {
   return { body: null, type: "unknown" };
 }
 
-async function saveMessage(data) {
+async function saveMessage(accountId, data) {
   const contactJid = normalizeJid(data.contactJid);
   const senderJid = normalizeJid(data.senderJid);
 
@@ -166,8 +178,8 @@ async function saveMessage(data) {
   }
 
   await query(
-    `INSERT IGNORE INTO messages (message_id, contact_jid, sender_jid, from_me, message_type, body, timestamp)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT IGNORE INTO messages (message_id, contact_jid, sender_jid, from_me, message_type, body, timestamp, account_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.messageId,
       contactJid,
@@ -176,6 +188,7 @@ async function saveMessage(data) {
       data.messageType,
       data.body,
       new Date(getMessageTimestampSeconds(data.timestamp) * 1000),
+      accountId,
     ]
   );
 }
@@ -201,42 +214,77 @@ async function resolveLid(lidJid) {
   return null;
 }
 
-async function stopSocket(removeSession) {
-  if (state.socket) {
+async function updateAccountStatus(accountId, fields) {
+  const acc = accounts.get(accountId);
+  if (!acc) return;
+  Object.assign(acc, fields);
+
+  const dbFields = [];
+  const dbValues = [];
+  if ("status" in fields) {
+    dbFields.push("status = ?");
+    dbValues.push(fields.status);
+  }
+  if ("phone" in fields) {
+    dbFields.push("phone = ?");
+    dbValues.push(fields.phone);
+  }
+  if (fields.status === "connected") {
+    dbFields.push("connected_at = NOW()");
+  }
+  if (dbFields.length === 0) return;
+
+  dbValues.push(accountId);
+  try {
+    await query(`UPDATE wa_accounts SET ${dbFields.join(", ")} WHERE id = ?`, dbValues);
+  } catch (err) {
+    log(`[ACC ${accountId}] db update error`, err);
+  }
+}
+
+async function stopSocket(accountId, removeSession) {
+  const acc = accounts.get(accountId);
+  if (!acc) return;
+
+  if (acc.socket) {
     try {
-      await state.socket.logout?.();
+      await acc.socket.logout?.();
     } catch {}
     try {
-      state.socket.ws?.close();
+      acc.socket.ws?.close();
     } catch {}
   }
 
-  state.socket = null;
-  state.store = null;
-  state.qr = null;
-  state.status = "disconnected";
-  state.connecting = false;
-  state.initialized = false;
+  acc.socket = null;
+  acc.store = null;
+  acc.qr = null;
+  acc.connecting = false;
+  acc.initialized = false;
+  await updateAccountStatus(accountId, { status: "disconnected", phone: null });
 
   if (removeSession) {
+    const sessionDir = path.join(SESSIONS_ROOT, acc.slug);
     try {
-      fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-      fs.mkdirSync(SESSION_DIR, { recursive: true });
+      fs.rmSync(sessionDir, { recursive: true, force: true });
+      fs.mkdirSync(sessionDir, { recursive: true });
     } catch {}
   }
 }
 
-async function startConnection() {
-  if (state.connecting || state.socket) return;
+async function startConnection(accountId) {
+  const acc = accounts.get(accountId);
+  if (!acc) return;
+  if (acc.connecting || acc.socket) return;
 
-  state.connecting = true;
-  state.qr = null;
-  state.status = "waiting";
+  acc.connecting = true;
+  acc.qr = null;
+  await updateAccountStatus(accountId, { status: "waiting" });
 
   try {
     const logger = (P.default || P)({ level: "silent" });
     const { version } = await fetchLatestBaileysVersion();
-    const auth = await useMultiFileAuthState(SESSION_DIR);
+    const sessionDir = path.join(SESSIONS_ROOT, acc.slug);
+    const auth = await useMultiFileAuthState(sessionDir);
     const store = makeInMemoryStore({ logger });
 
     const sock = makeWASocket({
@@ -244,7 +292,7 @@ async function startConnection() {
       auth: auth.state,
       printQRInTerminal: false,
       logger,
-      browser: ["Ayres Audit", "Chrome", "4.0.0"],
+      browser: [`Ayres Audit ${acc.slug}`, "Chrome", "4.0.0"],
       connectTimeoutMs: 60000,
       qrTimeout: 60000,
       defaultQueryTimeoutMs: 60000,
@@ -254,9 +302,9 @@ async function startConnection() {
 
     store.bind(sock.ev);
 
-    state.socket = sock;
-    state.store = store;
-    state.initialized = true;
+    acc.socket = sock;
+    acc.store = store;
+    acc.initialized = true;
 
     sock.ev.on("creds.update", auth.saveCreds);
 
@@ -268,7 +316,7 @@ async function startConnection() {
               await saveLidMapping(c.lid, c.id, c.notify || c.verifiedName || c.name || null);
             }
           } catch (err) {
-            log("[LID] map error", err);
+            log(`[ACC ${accountId}][LID] map error`, err);
           }
         }
       });
@@ -281,7 +329,7 @@ async function startConnection() {
             await saveLidMapping(c.lid, c.id, c.notify || c.name || null);
           }
         } catch (err) {
-          log("[HISTORY] contact map error", err);
+          log(`[ACC ${accountId}][HISTORY] contact map error`, err);
         }
       }
     });
@@ -291,41 +339,42 @@ async function startConnection() {
 
       if (qr) {
         try {
-          state.qr = await QRCode.toDataURL(qr, { width: 300, margin: 2 });
-          state.status = "waiting";
+          acc.qr = await QRCode.toDataURL(qr, { width: 300, margin: 2 });
+          await updateAccountStatus(accountId, { status: "waiting" });
         } catch (err) {
-          log("[WA] QR error", err);
+          log(`[ACC ${accountId}] QR error`, err);
         }
       }
 
       if (connection === "open") {
-        state.status = "connected";
-        state.qr = null;
-        state.connecting = false;
-        log("[WA] connected");
+        acc.qr = null;
+        acc.connecting = false;
+        const phone = String(sock.user?.id || "").split(":")[0].split("@")[0] || null;
+        await updateAccountStatus(accountId, { status: "connected", phone });
+        log(`[ACC ${accountId}] connected as ${phone}`);
       }
 
       if (connection === "close") {
         const statusCode = lastDisconnect?.error?.output?.statusCode ?? 0;
-        log("[WA] closed", statusCode);
-        state.socket = null;
-        state.store = null;
-        state.qr = null;
-        state.connecting = false;
-        state.status = "disconnected";
+        log(`[ACC ${accountId}] closed`, statusCode);
+        acc.socket = null;
+        acc.store = null;
+        acc.qr = null;
+        acc.connecting = false;
+        await updateAccountStatus(accountId, { status: "disconnected" });
 
         if (statusCode === DisconnectReason.loggedOut) {
-          await stopSocket(true);
+          await stopSocket(accountId, true);
         } else {
           setTimeout(() => {
-            startConnection().catch((err) => log("[WA] reconnect error", err));
+            startConnection(accountId).catch((err) => log(`[ACC ${accountId}] reconnect error`, err));
           }, 5000);
         }
       }
     });
 
     sock.ev.on("messages.upsert", async ({ messages: msgs, type }) => {
-      log("[EVENT] messages.upsert", { count: msgs?.length || 0, type });
+      log(`[ACC ${accountId}][EVENT] messages.upsert`, { count: msgs?.length || 0, type });
 
       for (const msg of msgs || []) {
         try {
@@ -340,7 +389,7 @@ async function startConnection() {
 
           if (parsed.type === "protocol") continue;
           if (parsed.type === "unknown" && !parsed.body) {
-            log("[SKIP] unknown message", { fromMe, key: msg.key });
+            log(`[ACC ${accountId}][SKIP] unknown message`, { fromMe, key: msg.key });
             continue;
           }
 
@@ -352,7 +401,7 @@ async function startConnection() {
             }
           }
 
-          await saveMessage({
+          await saveMessage(accountId, {
             messageId: msg.key.id || `${remoteJid}-${Date.now()}`,
             contactJid,
             senderJid,
@@ -363,31 +412,45 @@ async function startConnection() {
             pushName: msg.pushName || undefined,
           });
 
-          log("[DB] saved", {
+          log(`[ACC ${accountId}][DB] saved`, {
             contactJid,
             fromMe,
             messageType: parsed.type,
             body: parsed.body,
           });
         } catch (err) {
-          log("[DB] save error", err);
+          log(`[ACC ${accountId}][DB] save error`, err);
         }
       }
     });
   } catch (err) {
-    state.connecting = false;
-    state.status = "disconnected";
-    state.socket = null;
-    state.store = null;
-    log("[WA] start error", err);
+    acc.connecting = false;
+    acc.socket = null;
+    acc.store = null;
+    await updateAccountStatus(accountId, { status: "disconnected" });
+    log(`[ACC ${accountId}] start error`, err);
   }
 }
 
-async function autoStart() {
-  if (state.initialized || state.connecting || state.socket) return;
-  if (fs.existsSync(SESSION_DIR) && fs.readdirSync(SESSION_DIR).length > 0) {
-    await startConnection();
+async function autoStartAll() {
+  for (const id of ACCOUNT_IDS) {
+    const acc = accounts.get(id);
+    if (acc.initialized || acc.connecting || acc.socket) continue;
+    const sessionDir = path.join(SESSIONS_ROOT, acc.slug);
+    if (fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).length > 0) {
+      startConnection(id).catch((err) => log(`[ACC ${id}] auto-start error`, err));
+    }
   }
+}
+
+function snapshotAccount(acc) {
+  return {
+    id: acc.id,
+    slug: acc.slug,
+    status: acc.status,
+    phone: acc.phone,
+    qr: acc.qr,
+  };
 }
 
 function sendJson(res, status, body) {
@@ -411,34 +474,57 @@ function readJson(req) {
   });
 }
 
+function parseAccountId(value) {
+  const id = Number(value);
+  if (!ACCOUNT_IDS.includes(id)) return null;
+  return id;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${HOST}:${PORT}`);
 
     if (req.method === "GET" && url.pathname === "/status") {
-      await autoStart();
-      return sendJson(res, 200, { qr: state.qr, status: state.status });
+      await autoStartAll();
+      const idParam = url.searchParams.get("id");
+      if (idParam) {
+        const id = parseAccountId(idParam);
+        if (!id) return sendJson(res, 400, { error: "invalid id" });
+        return sendJson(res, 200, snapshotAccount(accounts.get(id)));
+      }
+      return sendJson(res, 200, {
+        accounts: ACCOUNT_IDS.map((id) => snapshotAccount(accounts.get(id))),
+      });
     }
 
     if (req.method === "POST" && url.pathname === "/connect") {
-      await startConnection();
+      const body = await readJson(req);
+      const id = parseAccountId(body?.id);
+      if (!id) return sendJson(res, 400, { error: "id required (1-3)" });
+      await startConnection(id);
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      return sendJson(res, 200, { qr: state.qr, status: state.status });
+      return sendJson(res, 200, snapshotAccount(accounts.get(id)));
     }
 
     if (req.method === "POST" && url.pathname === "/send") {
       const body = await readJson(req);
+      const id = parseAccountId(body?.id);
       const jid = body?.jid;
       const message = body?.message;
 
+      if (!id) return sendJson(res, 400, { error: "id required (1-3)" });
       if (!jid || !message) return sendJson(res, 400, { error: "jid and message required" });
-      if (!state.socket || state.status !== "connected") return sendJson(res, 503, { error: "WhatsApp not connected" });
 
-      const sent = await state.socket.sendMessage(jid, { text: message });
-      await saveMessage({
+      const acc = accounts.get(id);
+      if (!acc.socket || acc.status !== "connected") {
+        return sendJson(res, 503, { error: `account ${id} not connected` });
+      }
+
+      const sent = await acc.socket.sendMessage(jid, { text: message });
+      await saveMessage(id, {
         messageId: sent?.key?.id || `${Date.now()}`,
         contactJid: jid,
-        senderJid: state.socket.user?.id || "",
+        senderJid: acc.socket.user?.id || "",
         fromMe: true,
         messageType: "text",
         body: message,
@@ -449,10 +535,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/lookup") {
-      if (!state.socket || state.status !== "connected") return sendJson(res, 503, { error: "not connected" });
+      const id = parseAccountId(url.searchParams.get("id"));
+      if (!id) return sendJson(res, 400, { error: "id required (1-3)" });
+
+      const acc = accounts.get(id);
+      if (!acc.socket || acc.status !== "connected") {
+        return sendJson(res, 503, { error: `account ${id} not connected` });
+      }
 
       if (url.searchParams.get("dump")) {
-        const contacts = state.store?.contacts || {};
+        const contacts = acc.store?.contacts || {};
         const list = Object.entries(contacts).map(([key, val]) => ({
           id: key,
           lid: val?.lid || null,
@@ -466,12 +558,15 @@ const server = http.createServer(async (req, res) => {
       const phone = url.searchParams.get("phone");
       if (!phone) return sendJson(res, 400, { error: "pass phone or dump=1" });
 
-      const result = await state.socket.onWhatsApp(phone);
+      const result = await acc.socket.onWhatsApp(phone);
       return sendJson(res, 200, { input: phone, result });
     }
 
     if (req.method === "POST" && url.pathname === "/logout") {
-      await stopSocket(true);
+      const body = await readJson(req);
+      const id = parseAccountId(body?.id);
+      if (!id) return sendJson(res, 400, { error: "id required (1-3)" });
+      await stopSocket(id, true);
       return sendJson(res, 200, { success: true });
     }
 
@@ -496,5 +591,5 @@ server.on("error", (err) => {
 
 server.listen(PORT, HOST, async () => {
   log(`[WORKER] listening on http://${HOST}:${PORT}`);
-  await autoStart();
+  await autoStartAll();
 });

@@ -39,6 +39,10 @@ yarn-error.log*
 # whatsapp session data
 /wa_sessions
 
+# local runtime logs
+/.dev-server.log
+/.tunnel.log
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

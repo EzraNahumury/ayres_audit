@@ -1,141 +1,132 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Pencil, Check, X } from "lucide-react";
 
 type WAStatus = "waiting" | "connected" | "disconnected";
 
-interface WAResponse { qr: string | null; status: WAStatus; }
+interface Account {
+  id: number;
+  slug: string;
+  name: string;
+  status: WAStatus;
+  qr: string | null;
+  phone: string | null;
+}
 
 export default function ConnectPage() {
-  const [qr, setQr] = useState<string | null>(null);
-  const [status, setStatus] = useState<WAStatus>("disconnected");
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loggingOut, setLoggingOut] = useState(false);
+  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
+  const [editing, setEditing] = useState<{ id: number; value: string } | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Poll API
+  const setBusy = (id: number, busy: boolean) => {
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
   const poll = async () => {
     try {
-      const res = await fetch("/api/whatsapp");
+      const res = await fetch("/api/whatsapp", { cache: "no-store" });
       if (res.ok) {
-        const data: WAResponse = await res.json();
-        setQr(data.qr);
-        setStatus(data.status);
+        const data = await res.json();
+        setAccounts(data.accounts || []);
       }
     } catch { /* ignore */ }
   };
 
-  // Start polling
-  const startPolling = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(poll, 3000);
-  };
-
-  // On mount — always check status & start connection
   useEffect(() => {
     (async () => {
-      // First check current status
       await poll();
       setLoading(false);
-      // Try to connect (will return immediately if already connected)
-      try { await fetch("/api/whatsapp", { method: "POST" }); } catch { /* ignore */ }
-      await poll();
-      // Always poll — even if connected (to detect disconnects)
-      startPolling();
+      intervalRef.current = setInterval(poll, 3000);
     })();
-
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Logout
-  const handleLogout = async () => {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    try { await fetch("/api/whatsapp/logout", { method: "POST" }); } catch { /* ignore */ }
-    setStatus("disconnected");
-    setQr(null);
-    setLoggingOut(false);
-    // Reconnect — generate new QR
-    setLoading(true);
-    try { await fetch("/api/whatsapp", { method: "POST" }); } catch { /* ignore */ }
+  const handleConnect = async (id: number) => {
+    setBusy(id, true);
+    try {
+      await fetch("/api/whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      await poll();
+    } finally {
+      setBusy(id, false);
+    }
+  };
+
+  const handleLogout = async (id: number) => {
+    setBusy(id, true);
+    try {
+      await fetch("/api/whatsapp/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      await poll();
+    } finally {
+      setBusy(id, false);
+    }
+  };
+
+  const startEdit = (acc: Account) => setEditing({ id: acc.id, value: acc.name });
+  const cancelEdit = () => setEditing(null);
+  const saveEdit = async () => {
+    if (!editing) return;
+    const newName = editing.value.trim();
+    if (!newName) return cancelEdit();
+    await fetch("/api/whatsapp/accounts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: editing.id, name: newName }),
+    });
+    setEditing(null);
     await poll();
-    setLoading(false);
-    startPolling();
   };
 
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center" }}>
-        <div style={{ width: 56, height: 56, background: "#dbeafe", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <path d="M7 7h.01" /><path d="M17 7h.01" /><path d="M7 17h.01" />
-            <path d="M11 7h2v2h-2z" /><path d="M7 11h2v2H7z" /><path d="M11 11h2v2h-2z" />
-            <path d="M15 11h2v2h-2z" /><path d="M11 15h2v2h-2z" />
-          </svg>
-        </div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>Connect WhatsApp</h1>
-        <p style={{ fontSize: 14, color: "#6b7280", margin: "0 0 28px" }}>
-          {status === "connected" ? "WhatsApp sudah terhubung dan aktif monitoring." : "Scan QR code untuk menghubungkan WhatsApp."}
-        </p>
-
-        <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", padding: 32, marginBottom: 20 }}>
-          {/* Connected */}
-          {status === "connected" && !loggingOut && (
-            <div>
-              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-              </div>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>WhatsApp Terhubung!</h2>
-              <p style={{ fontSize: 14, color: "#6b7280", margin: "0 0 24px" }}>Sesi aktif. Pesan akan dimonitor secara otomatis.</p>
-              <button onClick={handleLogout} style={{ padding: "10px 24px", border: "1px solid #ef4444", borderRadius: 8, background: "#fff", color: "#ef4444", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                Logout WhatsApp
-              </button>
-            </div>
-          )}
-
-          {/* QR code */}
-          {status !== "connected" && !loading && qr && (
-            <div>
-              <img src={qr} alt="QR Code" style={{ width: 264, height: 264, margin: "0 auto 20px", display: "block", borderRadius: 8 }} />
-              <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: "0 0 4px" }}>Scan QR code dengan WhatsApp</p>
-              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Buka WhatsApp &rarr; Linked Devices &rarr; Link a Device</p>
-            </div>
-          )}
-
-          {/* Loading */}
-          {(loading || loggingOut || (status !== "connected" && !qr)) && status !== "connected" && (
-            <div>
-              <div style={{ width: 48, height: 48, border: "4px solid #e5e7eb", borderTop: "4px solid #3b82f6", borderRadius: "50%", margin: "0 auto 20px", animation: "wa-spin 0.8s linear infinite" }} />
-              <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: "0 0 4px" }}>
-                {loggingOut ? "Logging out..." : "Memulai koneksi..."}
-              </p>
-              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Mohon tunggu sebentar</p>
-            </div>
-          )}
+      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>
+            Connect WhatsApp
+          </h1>
+          <p style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>
+            Hubungkan hingga 3 akun WhatsApp. Scan QR di setiap card untuk mengaktifkan.
+          </p>
         </div>
 
-        {/* Status pill */}
-        <div style={{
-          display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 18px", borderRadius: 999, fontSize: 13, fontWeight: 500,
-          background: status === "connected" ? "#dcfce7" : status === "waiting" ? "#fef9c3" : "#f3f4f6",
-          color: status === "connected" ? "#16a34a" : status === "waiting" ? "#ca8a04" : "#9ca3af",
-        }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: status === "connected" ? "#16a34a" : status === "waiting" ? "#ca8a04" : "#9ca3af" }} />
-          {status === "connected" ? "Connected" : status === "waiting" ? "Waiting for scan..." : "Disconnected"}
-        </div>
-
-        {/* Instructions */}
-        {status !== "connected" && qr && !loading && (
-          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: 20, marginTop: 24, textAlign: "left" }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: "#111827", margin: "0 0 12px" }}>Cara menghubungkan:</h3>
-            {["Buka WhatsApp di HP", "Tap menu → Linked Devices → Link a Device", "Arahkan kamera ke QR code di atas", "Tunggu hingga status \"Connected\""].map((step, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: i < 3 ? 8 : 0 }}>
-                <span style={{ width: 22, height: 22, borderRadius: "50%", background: "#dbeafe", color: "#3b82f6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{i + 1}</span>
-                <span style={{ fontSize: 14, color: "#6b7280" }}>{step}</span>
-              </div>
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 60 }}>
+            <div style={{
+              width: 48, height: 48, border: "4px solid #e5e7eb", borderTop: "4px solid #3b82f6",
+              borderRadius: "50%", margin: "0 auto 16px", animation: "wa-spin 0.8s linear infinite",
+            }} />
+            <p style={{ fontSize: 14, color: "#6b7280" }}>Memuat status akun...</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {accounts.map((acc) => (
+              <AccountCard
+                key={acc.id}
+                acc={acc}
+                busy={busyIds.has(acc.id)}
+                editing={editing?.id === acc.id ? editing : null}
+                onConnect={() => handleConnect(acc.id)}
+                onLogout={() => handleLogout(acc.id)}
+                onEditStart={() => startEdit(acc)}
+                onEditChange={(v) => setEditing({ id: acc.id, value: v })}
+                onEditCancel={cancelEdit}
+                onEditSave={saveEdit}
+              />
             ))}
           </div>
         )}
@@ -143,4 +134,171 @@ export default function ConnectPage() {
       <style>{`@keyframes wa-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
   );
+}
+
+interface CardProps {
+  acc: Account;
+  busy: boolean;
+  editing: { id: number; value: string } | null;
+  onConnect: () => void;
+  onLogout: () => void;
+  onEditStart: () => void;
+  onEditChange: (value: string) => void;
+  onEditCancel: () => void;
+  onEditSave: () => void;
+}
+
+function AccountCard({ acc, busy, editing, onConnect, onLogout, onEditStart, onEditChange, onEditCancel, onEditSave }: CardProps) {
+  const isConnected = acc.status === "connected";
+  const isWaiting = acc.status === "waiting";
+
+  const pillBg = isConnected ? "#dcfce7" : isWaiting ? "#fef9c3" : "#f3f4f6";
+  const pillColor = isConnected ? "#16a34a" : isWaiting ? "#ca8a04" : "#9ca3af";
+  const dotColor = isConnected ? "#16a34a" : isWaiting ? "#ca8a04" : "#9ca3af";
+  const pillText = isConnected ? "Connected" : isWaiting ? "Waiting scan..." : "Disconnected";
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        {editing ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+            <input
+              autoFocus
+              value={editing.value}
+              onChange={(e) => onEditChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onEditSave();
+                if (e.key === "Escape") onEditCancel();
+              }}
+              style={{
+                flex: 1, padding: "6px 10px", fontSize: 15, fontWeight: 600,
+                border: "1px solid #3b82f6", borderRadius: 6, outline: "none", color: "#111827",
+              }}
+            />
+            <button onClick={onEditSave} style={btnIconStyle("#dcfce7", "#16a34a")}>
+              <Check style={{ width: 14, height: 14 }} />
+            </button>
+            <button onClick={onEditCancel} style={btnIconStyle("#fee2e2", "#dc2626")}>
+              <X style={{ width: 14, height: 14 }} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {acc.name}
+              </h3>
+              <button
+                onClick={onEditStart}
+                style={{ padding: 4, background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex" }}
+                title="Rename"
+              >
+                <Pencil style={{ width: 12, height: 12 }} />
+              </button>
+            </div>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 999,
+              fontSize: 11, fontWeight: 600, background: pillBg, color: pillColor, flexShrink: 0,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor }} />
+              {pillText}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ padding: 20, minHeight: 320, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        {isConnected ? (
+          <ConnectedView phone={acc.phone} onLogout={onLogout} busy={busy} />
+        ) : isWaiting && acc.qr ? (
+          <QRView qr={acc.qr} />
+        ) : isWaiting ? (
+          <LoadingView label="Generating QR..." />
+        ) : busy ? (
+          <LoadingView label="Connecting..." />
+        ) : (
+          <DisconnectedView onConnect={onConnect} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConnectedView({ phone, onLogout, busy }: { phone: string | null; onLogout: () => void; busy: boolean }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </div>
+      <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: "0 0 4px" }}>Terhubung</p>
+      <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 20px", fontFamily: "monospace" }}>
+        {phone ? `+${phone}` : "—"}
+      </p>
+      <button
+        onClick={onLogout}
+        disabled={busy}
+        style={{
+          padding: "8px 18px", border: "1px solid #ef4444", borderRadius: 8, background: "#fff",
+          color: "#ef4444", fontSize: 13, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer",
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        {busy ? "Logging out..." : "Logout"}
+      </button>
+    </div>
+  );
+}
+
+function QRView({ qr }: { qr: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <img src={qr} alt="QR Code" style={{ width: 220, height: 220, margin: "0 auto 12px", display: "block", borderRadius: 8 }} />
+      <p style={{ fontSize: 13, fontWeight: 600, color: "#111827", margin: "0 0 4px" }}>Scan QR</p>
+      <p style={{ fontSize: 11, color: "#6b7280", margin: 0 }}>WhatsApp &rarr; Linked Devices</p>
+    </div>
+  );
+}
+
+function LoadingView({ label }: { label: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{
+        width: 40, height: 40, border: "4px solid #e5e7eb", borderTop: "4px solid #3b82f6",
+        borderRadius: "50%", margin: "0 auto 12px", animation: "wa-spin 0.8s linear infinite",
+      }} />
+      <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>{label}</p>
+    </div>
+  );
+}
+
+function DisconnectedView({ onConnect }: { onConnect: () => void }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M9 9h.01" /><path d="M15 9h.01" /><path d="M9 15h.01" /><path d="M15 15h.01" />
+        </svg>
+      </div>
+      <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 16px" }}>Belum terhubung</p>
+      <button
+        onClick={onConnect}
+        style={{
+          padding: "10px 24px", border: "none", borderRadius: 8, background: "#3b82f6",
+          color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
+        }}
+      >
+        Connect
+      </button>
+    </div>
+  );
+}
+
+function btnIconStyle(bg: string, color: string): React.CSSProperties {
+  return {
+    padding: 6, background: bg, border: "none", borderRadius: 6, cursor: "pointer",
+    color, display: "flex", alignItems: "center", justifyContent: "center",
+  };
 }

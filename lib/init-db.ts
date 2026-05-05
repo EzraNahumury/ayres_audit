@@ -113,6 +113,28 @@ export async function initDatabase() {
     ) ENGINE=InnoDB
   `);
 
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS wa_accounts (
+      id           INT PRIMARY KEY AUTO_INCREMENT,
+      slug         VARCHAR(20) UNIQUE NOT NULL,
+      name         VARCHAR(100) NOT NULL,
+      phone        VARCHAR(20) DEFAULT NULL,
+      status       VARCHAR(20) DEFAULT 'disconnected',
+      connected_at TIMESTAMP NULL,
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB
+  `);
+
+  await conn.query(`
+    INSERT IGNORE INTO wa_accounts (id, slug, name) VALUES
+      (1, 'account_1', 'WA 1'),
+      (2, 'account_2', 'WA 2'),
+      (3, 'account_3', 'WA 3')
+  `);
+
+  await conn.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS account_id INT NOT NULL DEFAULT 1`);
+  await conn.query(`ALTER TABLE messages ADD INDEX IF NOT EXISTS idx_account (account_id)`);
+
   await conn.end();
   return { success: true };
 }
