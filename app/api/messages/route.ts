@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     const placeholders = contactJids.map(() => "?").join(", ");
 
     const rows = await query(
-      `SELECT message_id, contact_jid, sender_jid, from_me, message_type, body, timestamp
+      `SELECT message_id, contact_jid, sender_jid, from_me, message_type, body, timestamp, account_id
        FROM messages
        WHERE contact_jid IN (${placeholders})
        ORDER BY timestamp ASC`,

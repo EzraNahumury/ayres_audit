@@ -38,10 +38,15 @@ interface Message {
   message_type: string;
   body: string | null;
   timestamp: string;
+  account_id: number;
 }
 
-interface WAStatus {
+interface WAAccount {
+  id: number;
+  slug: string;
+  name: string;
   status: "waiting" | "connected" | "disconnected";
+  phone: string | null;
 }
 
 export default function AuditalWorkPage() {
@@ -52,7 +57,7 @@ export default function AuditalWorkPage() {
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [waConnected, setWaConnected] = useState(false);
+  const [waAccounts, setWaAccounts] = useState<WAAccount[]>([]);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -72,14 +77,34 @@ export default function AuditalWorkPage() {
     setShowScrollBtn(!isNearBottom);
   };
 
-  // Check WA status
+  // Check WA status (all 3 accounts)
   const checkWA = useCallback(async () => {
     try {
       const r = await fetch("/api/whatsapp");
-      const data: WAStatus = await r.json();
-      setWaConnected(data.status === "connected");
+      const data = await r.json();
+      if (Array.isArray(data?.accounts)) setWaAccounts(data.accounts);
     } catch { /* ignore */ }
   }, []);
+
+  // Pick the account_id to use when replying — prefer the account that
+  // received the last incoming message; fallback to last outgoing; finally
+  // fallback to first connected account.
+  const pickReplyAccountId = (msgs: Message[]): number | null => {
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      const m = msgs[i];
+      if (!m.from_me && m.account_id) return m.account_id;
+    }
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      const m = msgs[i];
+      if (m.from_me && m.account_id) return m.account_id;
+    }
+    const firstConnected = waAccounts.find((a) => a.status === "connected");
+    return firstConnected?.id ?? null;
+  };
+
+  const connectedCount = waAccounts.filter((a) => a.status === "connected").length;
+  const anyConnected = connectedCount > 0;
+  const accountById = (id: number | null) => waAccounts.find((a) => a.id === id);
 
   // Load contacts
   const loadContacts = useCallback(async () => {
@@ -150,9 +175,14 @@ export default function AuditalWorkPage() {
     return () => clearInterval(msgIv);
   }, [selected, loadMessages]);
 
-  // Send message
+  // Send message — auto-pick account based on last conversation context
   const handleSend = async () => {
     if (!input.trim() || !selected || sending) return;
+    const accountId = pickReplyAccountId(messages);
+    if (!accountId) {
+      alert("Tidak ada akun WhatsApp yang terhubung. Hubungkan minimal 1 akun di Connect WhatsApp.");
+      return;
+    }
     const text = input.trim();
     setSending(true);
     setInput("");
@@ -161,18 +191,20 @@ export default function AuditalWorkPage() {
       const res = await fetch("/api/whatsapp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jid: selected.jid, message: text }),
+        body: JSON.stringify({ id: accountId, jid: selected.jid, message: text }),
       });
 
       if (!res.ok) {
-        throw new Error("Gagal mengirim pesan");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Gagal mengirim pesan");
       }
 
       // Quick refresh
       setTimeout(() => loadMessages(selected.jid, false), 800);
       setTimeout(() => loadContacts(), 1000);
-    } catch {
+    } catch (err) {
       setInput(text);
+      alert(err instanceof Error ? err.message : "Gagal mengirim pesan");
     }
     setSending(false);
   };
@@ -272,9 +304,9 @@ export default function AuditalWorkPage() {
           <span style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>Audital Work</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 999, background: waConnected ? "#dcfce7" : "#fef2f2", fontSize: 12, fontWeight: 600, color: waConnected ? "#16a34a" : "#ef4444" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: waConnected ? "#16a34a" : "#ef4444" }} />
-            {waConnected ? "WhatsApp Connected" : "Disconnected"}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 999, background: anyConnected ? "#dcfce7" : "#fef2f2", fontSize: 12, fontWeight: 600, color: anyConnected ? "#16a34a" : "#ef4444" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: anyConnected ? "#16a34a" : "#ef4444" }} />
+            {connectedCount}/{waAccounts.length || 3} Connected
           </div>
           <span style={{ fontSize: 13, color: "#6b7280" }}>
             {contacts.length} kontak &middot; {contacts.reduce((a, c) => a + c.total_messages, 0)} pesan
@@ -436,34 +468,61 @@ export default function AuditalWorkPage() {
 
             {/* Input Area */}
             {canReply(selected) ? (
-              <div style={{ background: "#f0f2f5", padding: "6px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer" }}>
-                  <Smile style={{ width: 24, height: 24, color: "#54656f" }} />
-                </button>
-                <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer" }}>
-                  <Paperclip style={{ width: 24, height: 24, color: "#54656f", transform: "rotate(45deg)" }} />
-                </button>
-                <input
-                  type="text"
-                  placeholder="Ketik pesan"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={!waConnected}
-                  style={{
-                    flex: 1, padding: "9px 12px", border: "none", borderRadius: 8,
-                    fontSize: 15, outline: "none", background: "#fff",
-                    color: "#111b21",
-                    opacity: waConnected ? 1 : 0.5,
-                  }}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || sending || !waConnected}
-                  style={{ padding: 8, background: "none", border: "none", cursor: input.trim() && !sending && waConnected ? "pointer" : "default" }}
-                >
-                  <Send style={{ width: 24, height: 24, color: input.trim() && waConnected ? "#00a884" : "#8696a0" }} />
-                </button>
+              <div style={{ flexShrink: 0 }}>
+                {(() => {
+                  const replyAccId = pickReplyAccountId(messages);
+                  const replyAcc = accountById(replyAccId);
+                  const replyReady = replyAcc?.status === "connected";
+                  return (
+                    <>
+                      {replyAcc && (
+                        <div style={{ background: "#fef9c3", padding: "4px 16px", fontSize: 11, color: "#78350f", borderTop: "1px solid #fde68a", display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>Balas dari:</span>
+                          <strong>{replyAcc.name}</strong>
+                          {replyAcc.phone && <span style={{ fontFamily: "monospace" }}>(+{replyAcc.phone})</span>}
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6,
+                            padding: "1px 8px", borderRadius: 999, fontSize: 10, fontWeight: 600,
+                            background: replyReady ? "#dcfce7" : "#fee2e2",
+                            color: replyReady ? "#16a34a" : "#dc2626",
+                          }}>
+                            <span style={{ width: 5, height: 5, borderRadius: "50%", background: replyReady ? "#16a34a" : "#dc2626" }} />
+                            {replyReady ? "Connected" : "Disconnected"}
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ background: "#f0f2f5", padding: "6px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                        <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer" }}>
+                          <Smile style={{ width: 24, height: 24, color: "#54656f" }} />
+                        </button>
+                        <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer" }}>
+                          <Paperclip style={{ width: 24, height: 24, color: "#54656f", transform: "rotate(45deg)" }} />
+                        </button>
+                        <input
+                          type="text"
+                          placeholder={replyReady ? "Ketik pesan" : "Akun pengirim tidak terhubung"}
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          disabled={!replyReady}
+                          style={{
+                            flex: 1, padding: "9px 12px", border: "none", borderRadius: 8,
+                            fontSize: 15, outline: "none", background: "#fff",
+                            color: "#111b21",
+                            opacity: replyReady ? 1 : 0.5,
+                          }}
+                        />
+                        <button
+                          onClick={handleSend}
+                          disabled={!input.trim() || sending || !replyReady}
+                          style={{ padding: 8, background: "none", border: "none", cursor: input.trim() && !sending && replyReady ? "pointer" : "default" }}
+                        >
+                          <Send style={{ width: 24, height: 24, color: input.trim() && replyReady ? "#00a884" : "#8696a0" }} />
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             ) : (
               <div style={{ background: "#f0f2f5", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexShrink: 0, borderTop: "1px solid #e5e7eb" }}>
