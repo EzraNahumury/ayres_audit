@@ -12,6 +12,9 @@ import {
   Phone,
   MoreVertical,
   ArrowDown,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 
 interface Contact {
@@ -58,6 +61,8 @@ export default function AuditalWorkPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [waAccounts, setWaAccounts] = useState<WAAccount[]>([]);
+  const [editingContact, setEditingContact] = useState<{ name: string; phone: string } | null>(null);
+  const [savingContact, setSavingContact] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -158,8 +163,49 @@ export default function AuditalWorkPage() {
   const handleSelect = (c: Contact) => {
     setSelected(c);
     setInput("");
+    setEditingContact(null);
     prevMsgCountRef.current = 0;
     loadMessages(c.jid, false);
+  };
+
+  // Edit contact (name + phone)
+  const startEditContact = () => {
+    if (!selected) return;
+    setEditingContact({ name: selected.name || "", phone: selected.phone || "" });
+  };
+  const cancelEditContact = () => setEditingContact(null);
+  const saveEditContact = async () => {
+    if (!selected || !editingContact || savingContact) return;
+    const newName = editingContact.name.trim();
+    const newPhone = editingContact.phone.replace(/\D/g, "");
+
+    if (!newName) {
+      alert("Nama tidak boleh kosong");
+      return;
+    }
+    if (newPhone && (newPhone.length < 8 || newPhone.length > 20)) {
+      alert("Format nomor tidak valid (8-20 digit)");
+      return;
+    }
+
+    setSavingContact(true);
+    try {
+      const res = await fetch("/api/contacts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jid: selected.jid, name: newName, phone: newPhone }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || "Gagal menyimpan");
+      }
+      setSelected({ ...selected, name: newName, phone: newPhone || selected.phone });
+      setEditingContact(null);
+      await loadContacts();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal menyimpan");
+    }
+    setSavingContact(false);
   };
 
   // Realtime polling — contacts every 5s, messages every 2s
@@ -375,22 +421,78 @@ export default function AuditalWorkPage() {
         {selected ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
             {/* Chat Header */}
-            <div style={{ background: "#f0f2f5", padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, color: "#fff", backgroundImage: "linear-gradient(135deg, #00a884, #25d366)" }}>
+            <div style={{ background: "#f0f2f5", padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, color: "#fff", backgroundImage: "linear-gradient(135deg, #00a884, #25d366)", flexShrink: 0 }}>
                   {(selected.name || selected.phone)[0].toUpperCase()}
                 </div>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: "#111b21" }}>{displayName(selected)}</div>
-                  <div style={{ fontSize: 12, color: "#667781" }}>{selected.phone}</div>
-                </div>
+                {editingContact ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
+                    <input
+                      autoFocus
+                      placeholder="Nama"
+                      value={editingContact.name}
+                      onChange={(e) => setEditingContact({ ...editingContact, name: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEditContact();
+                        if (e.key === "Escape") cancelEditContact();
+                      }}
+                      style={{ padding: "4px 8px", fontSize: 14, fontWeight: 600, border: "1px solid #00a884", borderRadius: 4, outline: "none", color: "#111b21", background: "#fff" }}
+                    />
+                    <input
+                      placeholder="Nomor (digit saja)"
+                      value={editingContact.phone}
+                      onChange={(e) => setEditingContact({ ...editingContact, phone: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEditContact();
+                        if (e.key === "Escape") cancelEditContact();
+                      }}
+                      style={{ padding: "4px 8px", fontSize: 12, border: "1px solid #d1d7db", borderRadius: 4, outline: "none", color: "#667781", background: "#fff", fontFamily: "monospace" }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "#111b21", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName(selected)}</div>
+                    <div style={{ fontSize: 12, color: "#667781", fontFamily: "monospace" }}>{selected.phone}</div>
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {[Search, Phone, MoreVertical].map((Icon, i) => (
-                  <button key={i} style={{ padding: 8, background: "none", border: "none", cursor: "pointer", borderRadius: "50%" }}>
-                    <Icon style={{ width: 20, height: 20, color: "#54656f" }} />
-                  </button>
-                ))}
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                {editingContact ? (
+                  <>
+                    <button
+                      onClick={saveEditContact}
+                      disabled={savingContact}
+                      style={{ padding: 8, background: "#dcfce7", border: "none", cursor: savingContact ? "wait" : "pointer", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      title="Simpan"
+                    >
+                      <Check style={{ width: 18, height: 18, color: "#16a34a" }} />
+                    </button>
+                    <button
+                      onClick={cancelEditContact}
+                      disabled={savingContact}
+                      style={{ padding: 8, background: "#fee2e2", border: "none", cursor: savingContact ? "wait" : "pointer", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      title="Batal"
+                    >
+                      <X style={{ width: 18, height: 18, color: "#dc2626" }} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={startEditContact}
+                      style={{ padding: 8, background: "none", border: "none", cursor: "pointer", borderRadius: "50%" }}
+                      title="Edit nama & nomor"
+                    >
+                      <Pencil style={{ width: 18, height: 18, color: "#54656f" }} />
+                    </button>
+                    {[Search, Phone, MoreVertical].map((Icon, i) => (
+                      <button key={i} style={{ padding: 8, background: "none", border: "none", cursor: "pointer", borderRadius: "50%" }}>
+                        <Icon style={{ width: 20, height: 20, color: "#54656f" }} />
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
 

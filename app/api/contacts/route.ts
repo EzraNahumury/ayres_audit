@@ -22,14 +22,41 @@ function sanitizeDisplayName(name: string | null) {
   return normalized;
 }
 
-// PATCH /api/contacts - update contact name
+// PATCH /api/contacts - update contact name and/or phone
 export async function PATCH(request: Request) {
   try {
-    const { jid, name } = await request.json();
-    if (!jid || !name?.trim()) {
-      return NextResponse.json({ error: "jid dan name wajib diisi" }, { status: 400 });
+    const { jid, name, phone } = await request.json();
+    if (!jid) {
+      return NextResponse.json({ error: "jid wajib diisi" }, { status: 400 });
     }
-    await query("UPDATE contacts SET name = ? WHERE jid = ?", [name.trim(), jid]);
+
+    const trimmedName = typeof name === "string" ? name.trim() : null;
+    const cleanPhone = typeof phone === "string" ? phone.replace(/\D/g, "") : null;
+
+    if (!trimmedName && cleanPhone === null) {
+      return NextResponse.json({ error: "name atau phone harus diisi" }, { status: 400 });
+    }
+    if (cleanPhone !== null && cleanPhone && (cleanPhone.length < 8 || cleanPhone.length > 20)) {
+      return NextResponse.json({ error: "format phone tidak valid (8-20 digit)" }, { status: 400 });
+    }
+
+    if (trimmedName !== null && trimmedName !== "") {
+      await query("UPDATE contacts SET name = ? WHERE jid = ?", [trimmedName, jid]);
+    }
+
+    if (cleanPhone !== null) {
+      await query("UPDATE contacts SET phone = ? WHERE jid = ?", [cleanPhone, jid]);
+
+      if (typeof jid === "string" && jid.endsWith("@lid") && cleanPhone) {
+        const lid = jid.replace("@lid", "");
+        await query(
+          `INSERT INTO lid_mapping (lid, phone, name) VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE phone = VALUES(phone), name = COALESCE(VALUES(name), name)`,
+          [lid, cleanPhone, trimmedName || null]
+        );
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
