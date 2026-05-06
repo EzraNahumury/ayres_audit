@@ -15,6 +15,7 @@ import {
   Pencil,
   Check,
   X,
+  Download,
 } from "lucide-react";
 
 interface Contact {
@@ -64,6 +65,7 @@ export default function AuditalWorkPage() {
   const [waAccounts, setWaAccounts] = useState<WAAccount[]>([]);
   const [editingContact, setEditingContact] = useState<{ name: string; phone: string } | null>(null);
   const [savingContact, setSavingContact] = useState(false);
+  const [lightbox, setLightbox] = useState<{ url: string; type: "image" | "video"; filename: string } | null>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -533,7 +535,7 @@ export default function AuditalWorkPage() {
                           borderTopLeftRadius: msg.from_me ? 8 : 0,
                           borderTopRightRadius: msg.from_me ? 0 : 8,
                         }}>
-                          <MessageContent msg={msg} />
+                          <MessageContent msg={msg} onOpenMedia={(url, type, filename) => setLightbox({ url, type, filename })} />
                           <span style={{ float: "right", marginLeft: 8, marginTop: 2, display: "inline-flex", alignItems: "center", gap: 3 }}>
                             <span style={{ fontSize: 11, color: "#667781" }}>{formatTime(msg.timestamp)}</span>
                             {msg.from_me ? (
@@ -663,21 +665,39 @@ export default function AuditalWorkPage() {
           </div>
         )}
       </div>
+
+      {lightbox && (
+        <MediaLightbox
+          url={lightbox.url}
+          type={lightbox.type}
+          filename={lightbox.filename}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }
 
-function MessageContent({ msg }: { msg: Message }) {
+function getFilenameFromUrl(url: string) {
+  const last = url.split("/").pop() || "";
+  const match = last.match(/^[^_]+__(.+)$/);
+  return match ? match[1] : last;
+}
+
+function MessageContent({ msg, onOpenMedia }: { msg: Message; onOpenMedia: (url: string, type: "image" | "video", filename: string) => void }) {
   const caption = msg.body && msg.body !== "[Foto]" && msg.body !== "[Video]" && msg.body !== "[Dokumen]" && msg.body !== "[Audio]" && msg.body !== "[Sticker]" ? msg.body : null;
 
   if (msg.media_url) {
+    const filename = getFilenameFromUrl(msg.media_url);
+
     if (msg.message_type === "image" || msg.message_type === "sticker") {
       return (
         <>
           <img
             src={msg.media_url}
             alt={msg.message_type}
-            style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 6, marginBottom: caption ? 6 : 0 }}
+            onClick={() => onOpenMedia(msg.media_url!, "image", filename)}
+            style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 6, marginBottom: caption ? 6 : 0, cursor: "zoom-in" }}
           />
           {caption && (
             <span style={{ fontSize: 14, color: "#111b21", whiteSpace: "pre-wrap", lineHeight: 1.45, wordBreak: "break-word", display: "block" }}>
@@ -691,9 +711,19 @@ function MessageContent({ msg }: { msg: Message }) {
     if (msg.message_type === "video") {
       return (
         <>
-          <video src={msg.media_url} controls style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 6, marginBottom: caption ? 6 : 0 }} />
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <video src={msg.media_url} style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 6, cursor: "pointer" }} />
+            <div
+              onClick={() => onOpenMedia(msg.media_url!, "video", filename)}
+              style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z" /></svg>
+              </div>
+            </div>
+          </div>
           {caption && (
-            <span style={{ fontSize: 14, color: "#111b21", whiteSpace: "pre-wrap", lineHeight: 1.45, wordBreak: "break-word", display: "block" }}>
+            <span style={{ fontSize: 14, color: "#111b21", whiteSpace: "pre-wrap", lineHeight: 1.45, wordBreak: "break-word", display: "block", marginTop: 6 }}>
               {caption}
             </span>
           )}
@@ -706,16 +736,17 @@ function MessageContent({ msg }: { msg: Message }) {
     }
 
     if (msg.message_type === "document") {
-      const filename = msg.media_url.split("/").pop()?.replace(/^[^_]+__/, "") || "document";
       return (
         <a
           href={msg.media_url}
+          download={filename}
           target="_blank"
           rel="noreferrer"
           style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "rgba(0,0,0,0.04)", borderRadius: 6, textDecoration: "none", color: "#111b21", fontSize: 13, maxWidth: 280 }}
         >
           <span style={{ fontSize: 18 }}>📄</span>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{filename}</span>
+          <Download style={{ width: 16, height: 16, color: "#54656f", flexShrink: 0 }} />
         </a>
       );
     }
@@ -725,5 +756,64 @@ function MessageContent({ msg }: { msg: Message }) {
     <span style={{ fontSize: 14, color: "#111b21", whiteSpace: "pre-wrap", lineHeight: 1.45, wordBreak: "break-word" }}>
       {msg.body || `[${msg.message_type}]`}
     </span>
+  );
+}
+
+function MediaLightbox({ url, type, filename, onClose }: { url: string; type: "image" | "video"; filename: string; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <div style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 10, zIndex: 1001 }}>
+        <a
+          href={url}
+          download={filename}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.15)",
+            display: "flex", alignItems: "center", justifyContent: "center", color: "#fff",
+            textDecoration: "none", cursor: "pointer",
+          }}
+          title="Download"
+        >
+          <Download style={{ width: 20, height: 20 }} />
+        </a>
+        <button
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          style={{
+            width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.15)",
+            border: "none", display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", cursor: "pointer",
+          }}
+          title="Tutup (Esc)"
+        >
+          <X style={{ width: 22, height: 22 }} />
+        </button>
+      </div>
+
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: "90vw", maxHeight: "90vh" }}>
+        {type === "image" ? (
+          <img src={url} alt={filename} style={{ maxWidth: "90vw", maxHeight: "90vh", display: "block", borderRadius: 4 }} />
+        ) : (
+          <video src={url} controls autoPlay style={{ maxWidth: "90vw", maxHeight: "90vh", display: "block", borderRadius: 4 }} />
+        )}
+      </div>
+
+      <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", color: "#d1d5db", fontSize: 12, fontFamily: "monospace", maxWidth: "80vw", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {filename}
+      </div>
+    </div>
   );
 }
