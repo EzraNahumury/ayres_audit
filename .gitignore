@@ -39,6 +39,9 @@ yarn-error.log*
 # whatsapp session data
 /wa_sessions
 
+# whatsapp media downloaded from inbound messages
+/public/wa-media
+
 # local runtime logs
 /.dev-server.log
 /.tunnel.log

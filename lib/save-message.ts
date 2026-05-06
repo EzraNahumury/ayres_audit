@@ -10,6 +10,7 @@ interface MessageData {
   timestamp: number;
   pushName?: string;
   accountId?: number;
+  mediaUrl?: string | null;
 }
 
 function sanitizeContactName(name?: string | null) {
@@ -106,8 +107,8 @@ export async function saveMessage(data: MessageData) {
   const ts = new Date(normalizeTimestamp(data.timestamp) * 1000);
 
   await query(
-    `INSERT IGNORE INTO messages (message_id, contact_jid, sender_jid, from_me, message_type, body, timestamp, account_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [data.messageId, contactJid, senderJid, data.fromMe ? 1 : 0, data.messageType, data.body, ts, data.accountId ?? 1]
+    `INSERT IGNORE INTO messages (message_id, contact_jid, sender_jid, from_me, message_type, body, media_url, timestamp, account_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [data.messageId, contactJid, senderJid, data.fromMe ? 1 : 0, data.messageType, data.body, data.mediaUrl ?? null, ts, data.accountId ?? 1]
   );
 }

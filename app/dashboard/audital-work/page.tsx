@@ -40,6 +40,7 @@ interface Message {
   from_me: number;
   message_type: string;
   body: string | null;
+  media_url: string | null;
   timestamp: string;
   account_id: number;
 }
@@ -532,9 +533,7 @@ export default function AuditalWorkPage() {
                           borderTopLeftRadius: msg.from_me ? 8 : 0,
                           borderTopRightRadius: msg.from_me ? 0 : 8,
                         }}>
-                          <span style={{ fontSize: 14, color: "#111b21", whiteSpace: "pre-wrap", lineHeight: 1.45, wordBreak: "break-word" }}>
-                            {msg.body || `[${msg.message_type}]`}
-                          </span>
+                          <MessageContent msg={msg} />
                           <span style={{ float: "right", marginLeft: 8, marginTop: 2, display: "inline-flex", alignItems: "center", gap: 3 }}>
                             <span style={{ fontSize: 11, color: "#667781" }}>{formatTime(msg.timestamp)}</span>
                             {msg.from_me ? (
@@ -665,5 +664,66 @@ export default function AuditalWorkPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function MessageContent({ msg }: { msg: Message }) {
+  const caption = msg.body && msg.body !== "[Foto]" && msg.body !== "[Video]" && msg.body !== "[Dokumen]" && msg.body !== "[Audio]" && msg.body !== "[Sticker]" ? msg.body : null;
+
+  if (msg.media_url) {
+    if (msg.message_type === "image" || msg.message_type === "sticker") {
+      return (
+        <>
+          <img
+            src={msg.media_url}
+            alt={msg.message_type}
+            style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 6, marginBottom: caption ? 6 : 0 }}
+          />
+          {caption && (
+            <span style={{ fontSize: 14, color: "#111b21", whiteSpace: "pre-wrap", lineHeight: 1.45, wordBreak: "break-word", display: "block" }}>
+              {caption}
+            </span>
+          )}
+        </>
+      );
+    }
+
+    if (msg.message_type === "video") {
+      return (
+        <>
+          <video src={msg.media_url} controls style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 6, marginBottom: caption ? 6 : 0 }} />
+          {caption && (
+            <span style={{ fontSize: 14, color: "#111b21", whiteSpace: "pre-wrap", lineHeight: 1.45, wordBreak: "break-word", display: "block" }}>
+              {caption}
+            </span>
+          )}
+        </>
+      );
+    }
+
+    if (msg.message_type === "audio") {
+      return <audio src={msg.media_url} controls style={{ display: "block", maxWidth: 280 }} />;
+    }
+
+    if (msg.message_type === "document") {
+      const filename = msg.media_url.split("/").pop()?.replace(/^[^_]+__/, "") || "document";
+      return (
+        <a
+          href={msg.media_url}
+          target="_blank"
+          rel="noreferrer"
+          style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "rgba(0,0,0,0.04)", borderRadius: 6, textDecoration: "none", color: "#111b21", fontSize: 13, maxWidth: 280 }}
+        >
+          <span style={{ fontSize: 18 }}>📄</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{filename}</span>
+        </a>
+      );
+    }
+  }
+
+  return (
+    <span style={{ fontSize: 14, color: "#111b21", whiteSpace: "pre-wrap", lineHeight: 1.45, wordBreak: "break-word" }}>
+      {msg.body || `[${msg.message_type}]`}
+    </span>
   );
 }

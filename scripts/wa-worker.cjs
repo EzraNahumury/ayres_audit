@@ -7,19 +7,22 @@ const QRCode = require("qrcode");
 const P = require("pino");
 
 const makeWASocket = baileys.default;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeInMemoryStore } = baileys;
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeInMemoryStore, downloadMediaMessage } = baileys;
 
 const PORT = Number(process.env.WA_WORKER_PORT || 3311);
 const HOST = "127.0.0.1";
 const SESSIONS_ROOT = path.join(process.cwd(), "wa_sessions");
 const LOG_FILE = path.join(SESSIONS_ROOT, "worker.log");
+const MEDIA_ROOT = path.join(process.cwd(), "public", "wa-media");
 
 const ACCOUNT_IDS = [1, 2, 3];
 const ACCOUNT_SLUGS = { 1: "account_1", 2: "account_2", 3: "account_3" };
 
 fs.mkdirSync(SESSIONS_ROOT, { recursive: true });
+fs.mkdirSync(MEDIA_ROOT, { recursive: true });
 for (const id of ACCOUNT_IDS) {
   fs.mkdirSync(path.join(SESSIONS_ROOT, ACCOUNT_SLUGS[id]), { recursive: true });
+  fs.mkdirSync(path.join(MEDIA_ROOT, ACCOUNT_SLUGS[id]), { recursive: true });
 }
 
 const accounts = new Map();
@@ -102,6 +105,67 @@ function getMessageTimestampSeconds(value) {
   return Math.floor(Date.now() / 1000);
 }
 
+function pickExtension(mimetype, fallback) {
+  if (typeof mimetype !== "string") return fallback;
+  const sub = mimetype.split("/")[1] || fallback;
+  return sub.split(";")[0].split("+")[0] || fallback;
+}
+
+function sanitizeFilename(name) {
+  return String(name || "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+}
+
+async function downloadAndStoreMedia(accountId, msg) {
+  const m = msg.message;
+  if (!m) return null;
+
+  const slug = ACCOUNT_SLUGS[accountId];
+  const messageId = sanitizeFilename(msg.key?.id || `${Date.now()}`);
+
+  let kind = null;
+  let ext = null;
+  let originalName = null;
+
+  if (m.imageMessage) {
+    kind = "image";
+    ext = pickExtension(m.imageMessage.mimetype, "jpg");
+  } else if (m.videoMessage) {
+    kind = "video";
+    ext = pickExtension(m.videoMessage.mimetype, "mp4");
+  } else if (m.audioMessage) {
+    kind = "audio";
+    ext = pickExtension(m.audioMessage.mimetype, "ogg");
+  } else if (m.stickerMessage) {
+    kind = "sticker";
+    ext = pickExtension(m.stickerMessage.mimetype, "webp");
+  } else if (m.documentMessage) {
+    kind = "document";
+    ext = pickExtension(m.documentMessage.mimetype, "bin");
+    originalName = sanitizeFilename(m.documentMessage.fileName || "");
+  } else if (m.documentWithCaptionMessage?.message?.documentMessage) {
+    kind = "document";
+    const doc = m.documentWithCaptionMessage.message.documentMessage;
+    ext = pickExtension(doc.mimetype, "bin");
+    originalName = sanitizeFilename(doc.fileName || "");
+  } else {
+    return null;
+  }
+
+  try {
+    const buffer = await downloadMediaMessage(msg, "buffer", {});
+    if (!buffer || buffer.length === 0) return null;
+
+    const filename = originalName ? `${messageId}__${originalName}` : `${messageId}.${ext}`;
+    const absPath = path.join(MEDIA_ROOT, slug, filename);
+    fs.writeFileSync(absPath, buffer);
+
+    return { url: `/wa-media/${slug}/${filename}`, kind };
+  } catch (err) {
+    log(`[ACC ${accountId}][MEDIA] download error`, err);
+    return null;
+  }
+}
+
 function extractBody(msg) {
   const m = msg.message;
   if (!m) return { body: null, type: "unknown" };
@@ -178,8 +242,8 @@ async function saveMessage(accountId, data) {
   }
 
   await query(
-    `INSERT IGNORE INTO messages (message_id, contact_jid, sender_jid, from_me, message_type, body, timestamp, account_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT IGNORE INTO messages (message_id, contact_jid, sender_jid, from_me, message_type, body, media_url, timestamp, account_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.messageId,
       contactJid,
@@ -187,6 +251,7 @@ async function saveMessage(accountId, data) {
       data.fromMe ? 1 : 0,
       data.messageType,
       data.body,
+      data.mediaUrl || null,
       new Date(getMessageTimestampSeconds(data.timestamp) * 1000),
       accountId,
     ]
@@ -401,6 +466,12 @@ async function startConnection(accountId) {
             }
           }
 
+          let mediaUrl = null;
+          if (["image", "video", "audio", "sticker", "document"].includes(parsed.type)) {
+            const stored = await downloadAndStoreMedia(accountId, msg);
+            if (stored) mediaUrl = stored.url;
+          }
+
           await saveMessage(accountId, {
             messageId: msg.key.id || `${remoteJid}-${Date.now()}`,
             contactJid,
@@ -408,6 +479,7 @@ async function startConnection(accountId) {
             fromMe,
             messageType: parsed.type,
             body: parsed.body,
+            mediaUrl,
             timestamp: msg.messageTimestamp,
             pushName: msg.pushName || undefined,
           });
@@ -417,6 +489,7 @@ async function startConnection(accountId) {
             fromMe,
             messageType: parsed.type,
             body: parsed.body,
+            mediaUrl,
           });
         } catch (err) {
           log(`[ACC ${accountId}][DB] save error`, err);
