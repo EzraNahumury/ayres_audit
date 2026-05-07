@@ -166,7 +166,7 @@ export default function CSDistributionPage() {
       {!isToday && (
         <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#1d4ed8" }}>
           <Calendar style={{ width: 15, height: 15, flexShrink: 0 }} />
-          Menampilkan CS yang online pada <strong style={{ marginLeft: 4 }}>{formatDateLabel(selectedDate)}</strong> &mdash; kontak yang baru masuk hari itu
+          Menampilkan CS yang aktif menangani chat pada <strong style={{ marginLeft: 4 }}>{formatDateLabel(selectedDate)}</strong>
         </div>
       )}
 
@@ -258,8 +258,8 @@ export default function CSDistributionPage() {
             </>
           ) : (
             <>
-              <h2 style={{ fontSize: 16, fontWeight: 600, color: "#374151", margin: "0 0 8px" }}>Tidak ada CS online</h2>
-              <p style={{ fontSize: 14, color: "#9ca3af", margin: 0 }}>Tidak ada CS yang tercatat online pada tanggal {formatDateLabel(selectedDate)}.</p>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: "#374151", margin: "0 0 8px" }}>Tidak ada aktivitas CS</h2>
+              <p style={{ fontSize: 14, color: "#9ca3af", margin: 0 }}>Tidak ada CS yang menerima atau mengirim pesan pada tanggal {formatDateLabel(selectedDate)}.</p>
             </>
           )}
         </div>

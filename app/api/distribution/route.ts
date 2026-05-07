@@ -30,18 +30,37 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date") || getTodayJakarta();
 
-    const csUsers = await query<CsUser[]>(
-      `
-      SELECT DISTINCT u.id, u.name, u.username, u.is_online
-      FROM users u
-      INNER JOIN roles r ON r.name = u.role
-      INNER JOIN role_permissions rp ON rp.role_id = r.id AND rp.permission = 'audital_work'
-      LEFT JOIN cs_attendance ca_log ON ca_log.user_id = u.id AND ca_log.date = ?
-      WHERE (? = ? AND u.is_online = 1) OR (? <> ? AND ca_log.user_id IS NOT NULL)
-      ORDER BY u.name ASC
-      `,
-      [date, date, getTodayJakarta(), date, getTodayJakarta()]
-    );
+    const todayJakarta = getTodayJakarta();
+    const isToday = date === todayJakarta;
+
+    const csUsers = isToday
+      ? await query<CsUser[]>(
+          `
+          SELECT DISTINCT u.id, u.name, u.username, u.is_online
+          FROM users u
+          INNER JOIN roles r ON r.name = u.role
+          INNER JOIN role_permissions rp ON rp.role_id = r.id AND rp.permission = 'audital_work'
+          WHERE u.is_online = 1
+          ORDER BY u.name ASC
+          `
+        )
+      : await query<CsUser[]>(
+          `
+          SELECT DISTINCT u.id, u.name, u.username, u.is_online
+          FROM users u
+          INNER JOIN roles r ON r.name = u.role
+          INNER JOIN role_permissions rp ON rp.role_id = r.id AND rp.permission = 'audital_work'
+          WHERE EXISTS (
+            SELECT 1
+            FROM contact_assignments ca
+            INNER JOIN messages m ON m.contact_jid = ca.contact_jid
+            WHERE ca.user_id = u.id
+              AND DATE(CONVERT_TZ(m.timestamp, '+00:00', '+07:00')) = ?
+          )
+          ORDER BY u.name ASC
+          `,
+          [date]
+        );
 
     const result = await Promise.all(
       csUsers.map(async (cs) => {
