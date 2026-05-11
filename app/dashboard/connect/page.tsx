@@ -44,7 +44,7 @@ export default function ConnectPage() {
     (async () => {
       await poll();
       setLoading(false);
-      intervalRef.current = setInterval(poll, 3000);
+      intervalRef.current = setInterval(poll, 10000);
     })();
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);

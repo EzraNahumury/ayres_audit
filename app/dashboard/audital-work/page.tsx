@@ -211,16 +211,16 @@ export default function AuditalWorkPage() {
     setSavingContact(false);
   };
 
-  // Realtime polling — contacts every 5s, messages every 2s
+  // Realtime polling — tuned for Hostinger Cloud (contacts 10s, WA 30s, messages 3s)
   useEffect(() => {
-    const contactIv = setInterval(() => loadContacts(), 5000);
-    const waIv = setInterval(() => checkWA(), 10000);
+    const contactIv = setInterval(() => loadContacts(), 10000);
+    const waIv = setInterval(() => checkWA(), 30000);
     return () => { clearInterval(contactIv); clearInterval(waIv); };
   }, [loadContacts, checkWA]);
 
   useEffect(() => {
     if (!selected) return;
-    const msgIv = setInterval(() => loadMessages(selected.jid, true), 2000);
+    const msgIv = setInterval(() => loadMessages(selected.jid, true), 3000);
     return () => clearInterval(msgIv);
   }, [selected, loadMessages]);
 
