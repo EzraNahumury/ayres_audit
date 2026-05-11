@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AUTH_COOKIE, verifyToken } from "@/lib/auth";
 
 // Map routes to permission keys
 const routePermissions: Record<string, string> = {
@@ -12,43 +13,32 @@ const routePermissions: Record<string, string> = {
   "/dashboard/ai-settings": "ai_settings",
 };
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip login page, API routes, static files
   if (pathname === "/login" || pathname.startsWith("/api/") || pathname.startsWith("/_next/")) {
     return NextResponse.next();
   }
 
-  // Check auth cookie
-  const token = request.cookies.get("auth_token")?.value;
+  const token = request.cookies.get(AUTH_COOKIE)?.value;
 
   if (pathname.startsWith("/dashboard") || pathname === "/") {
-    if (!token) {
+    const user = await verifyToken(token);
+    if (!user) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    // Decode token & check permissions
-    try {
-      const user = JSON.parse(Buffer.from(token, "base64").toString());
-      const permissions: string[] = user.permissions || [];
+    const permissions = user.permissions || [];
+    if (permissions.includes("all")) return NextResponse.next();
 
-      // Super Admin / "all" permission = access everything
-      if (permissions.includes("all")) return NextResponse.next();
-
-      // Check route-specific permission
-      for (const [route, perm] of Object.entries(routePermissions)) {
-        if (pathname.startsWith(route) && !permissions.includes(perm)) {
-          // Redirect to first allowed page
-          const firstAllowed = Object.entries(routePermissions).find(([, p]) => permissions.includes(p));
-          if (firstAllowed) {
-            return NextResponse.redirect(new URL(firstAllowed[0], request.url));
-          }
-          return NextResponse.redirect(new URL("/login", request.url));
+    for (const [route, perm] of Object.entries(routePermissions)) {
+      if (pathname.startsWith(route) && !permissions.includes(perm)) {
+        const firstAllowed = Object.entries(routePermissions).find(([, p]) => permissions.includes(p));
+        if (firstAllowed) {
+          return NextResponse.redirect(new URL(firstAllowed[0], request.url));
         }
+        return NextResponse.redirect(new URL("/login", request.url));
       }
-    } catch {
-      return NextResponse.redirect(new URL("/login", request.url));
     }
   }
 

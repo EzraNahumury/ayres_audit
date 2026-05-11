@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { hashPassword } from "@/lib/auth";
 
 const CS_ROLE_NAME = "CS";
 
@@ -58,9 +59,10 @@ export async function POST(request: Request) {
 
     await ensureCSRole();
 
+    const passwordHash = await hashPassword(password);
     await query(
       "INSERT INTO users (username, password, name, role) VALUES (?, ?, ?, ?)",
-      [username, password, name, CS_ROLE_NAME]
+      [username, passwordHash, name, CS_ROLE_NAME]
     );
 
     return NextResponse.json({ success: true });
