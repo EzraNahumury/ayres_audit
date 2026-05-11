@@ -291,14 +291,22 @@ export default function AgentPage() {
             </div>
           ) : (
             sessions.map((s) => (
-              <button
+              <div
                 key={s.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => loadChat(s.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    loadChat(s.id);
+                  }
+                }}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                  padding: "10px 12px", borderRadius: 8, cursor: "pointer",
                   background: activeChat === s.id ? "#e5e7eb" : "transparent",
-                  marginBottom: 2, textAlign: "left",
+                  marginBottom: 2,
                 }}
               >
                 <MessageSquare style={{ width: 16, height: 16, color: "#9ca3af", flexShrink: 0 }} />
@@ -311,7 +319,7 @@ export default function AgentPage() {
                 <button onClick={(e) => handleDelete(s.id, e)} style={{ padding: 4, background: "none", border: "none", cursor: "pointer", borderRadius: 4, opacity: 0.4 }}>
                   <Trash2 style={{ width: 14, height: 14, color: "#ef4444" }} />
                 </button>
-              </button>
+              </div>
             ))
           )}
         </div>
