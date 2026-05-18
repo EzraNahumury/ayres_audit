@@ -15,31 +15,14 @@ const externalPackages = [
   "mysql2",
 ];
 
-// Glob patterns for every node_modules tree that the WA worker reaches into.
-// On Hostinger (standalone build + aggressive prune), anything not listed here
-// gets dropped from node_modules and the worker fails with MODULE_NOT_FOUND.
+// scripts/wa-worker.cjs is loaded via child_process, completely outside the
+// Next.js module graph, so next-trace can't follow its require() chain. Rather
+// than enumerate every transitive dep (Baileys + libsignal + protobufjs alone
+// pull in 100+ packages), include the whole node_modules tree for the worker
+// routes. Other (non-WA) routes still get the narrow trace they had before.
 const workerIncludes = [
   "./scripts/wa-worker.cjs",
-  "./node_modules/@whiskeysockets/**/*",
-  "./node_modules/@adiwajshing/**/*",
-  "./node_modules/@hapi/**/*",
-  "./node_modules/@protobufjs/**/*",
-  "./node_modules/@cacheable/**/*",
-  "./node_modules/protobufjs/**/*",
-  "./node_modules/libsignal/**/*",
-  "./node_modules/link-preview-js/**/*",
-  "./node_modules/axios/**/*",
-  "./node_modules/lodash/**/*",
-  "./node_modules/pino/**/*",
-  "./node_modules/pino-*/**/*",
-  "./node_modules/ws/**/*",
-  "./node_modules/uuid/**/*",
-  "./node_modules/cache-manager/**/*",
-  "./node_modules/libphonenumber-js/**/*",
-  "./node_modules/music-metadata/**/*",
-  "./node_modules/audio-decode/**/*",
-  "./node_modules/async-lock/**/*",
-  "./node_modules/qrcode/**/*",
+  "./node_modules/**/*",
 ];
 
 const nextConfig: NextConfig = {
