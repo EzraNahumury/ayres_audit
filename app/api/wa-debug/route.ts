@@ -18,6 +18,22 @@ export async function GET() {
   result.scriptPath = scriptPath;
   result.scriptExists = fs.existsSync(scriptPath);
 
+  // 1b. Look for baileys in candidate node_modules locations
+  const candidates = [
+    path.join(process.cwd(), "node_modules", "@whiskeysockets", "baileys"),
+    path.join(process.cwd(), ".next", "standalone", "node_modules", "@whiskeysockets", "baileys"),
+    path.join(process.cwd(), "..", "node_modules", "@whiskeysockets", "baileys"),
+    path.join(scriptPath, "..", "..", "node_modules", "@whiskeysockets", "baileys"),
+  ];
+  result.baileysSearch = candidates.map((p) => ({ path: p, exists: fs.existsSync(p) }));
+
+  // 1c. List top-level dirs at cwd
+  try {
+    result.cwdContents = fs.readdirSync(process.cwd()).slice(0, 40);
+  } catch (err) {
+    result.cwdContentsError = err instanceof Error ? err.message : String(err);
+  }
+
   // 2. Check write permission on wa_sessions
   const sessionsRoot = path.join(process.cwd(), "wa_sessions");
   try {
