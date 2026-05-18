@@ -34,6 +34,33 @@ export async function GET() {
     result.cwdContentsError = err instanceof Error ? err.message : String(err);
   }
 
+  // 1d. Look for protobufjs everywhere it might exist
+  const protobufCandidates = [
+    path.join(process.cwd(), "node_modules", "protobufjs"),
+    path.join(process.cwd(), "node_modules", "protobufjs", "minimal.js"),
+    path.join(process.cwd(), "node_modules", "@whiskeysockets", "baileys", "node_modules", "protobufjs"),
+    path.join(process.cwd(), "node_modules", "@whiskeysockets", "baileys", "node_modules", "protobufjs", "minimal.js"),
+  ];
+  result.protobufSearch = protobufCandidates.map((p) => ({ path: p, exists: fs.existsSync(p) }));
+
+  // 1e. Top-level node_modules listing (first 60 entries)
+  try {
+    const nm = fs.readdirSync(path.join(process.cwd(), "node_modules"));
+    result.nodeModulesCount = nm.length;
+    result.nodeModulesSample = nm.filter((n) => !n.startsWith(".")).slice(0, 60);
+    result.nodeModulesHasProtobuf = nm.includes("protobufjs");
+  } catch (err) {
+    result.nodeModulesError = err instanceof Error ? err.message : String(err);
+  }
+
+  // 1f. Show installed package.json deps for sanity
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
+    result.packageJsonDeps = Object.keys(pkg.dependencies || {});
+  } catch (err) {
+    result.packageJsonError = err instanceof Error ? err.message : String(err);
+  }
+
   // 2. Check write permission on wa_sessions
   const sessionsRoot = path.join(process.cwd(), "wa_sessions");
   try {
